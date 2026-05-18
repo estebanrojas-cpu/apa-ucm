@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\PeriodoController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
@@ -19,6 +20,9 @@ Route::middleware('auth')->group(function () {
 
     Route::middleware('role:analista_ccda')->prefix('analista')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'analista'])->name('analista.dashboard');
+        Route::get('/periodos',       [PeriodoController::class, 'index'])->name('analista.periodos.index');
+        Route::get('/periodos/crear', [PeriodoController::class, 'create'])->name('analista.periodos.create');
+        Route::post('/periodos',      [PeriodoController::class, 'store'])->name('analista.periodos.store');
     });
 
     Route::middleware('role:secretario')->prefix('secretario')->group(function () {

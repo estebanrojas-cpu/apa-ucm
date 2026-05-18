@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Cronograma;
+use App\Models\Nomina;
+use App\Models\Periodo;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -14,7 +17,13 @@ class DashboardController extends Controller
 
     public function analista(): Response
     {
-        return Inertia::render('Dashboard/AnalistaCCDA');
+        return Inertia::render('Dashboard/AnalistaCCDA', [
+            'stats' => [
+                'periodos_activos'     => Periodo::where('estado', 'activo')->count(),
+                'nominas_cargadas'     => Nomina::count(),
+                'cronogramas_vigentes' => Cronograma::vigentes()->count(),
+            ],
+        ]);
     }
 
     public function secretario(): Response
