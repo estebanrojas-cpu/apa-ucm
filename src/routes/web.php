@@ -4,6 +4,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\NominaController;
 use App\Http\Controllers\PeriodoController;
+use App\Http\Controllers\SecretarioController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
@@ -32,7 +33,8 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware('role:secretario')->prefix('secretario')->group(function () {
-        Route::get('/dashboard', [DashboardController::class, 'secretario'])->name('secretario.dashboard');
+        Route::get('/dashboard',    [DashboardController::class,  'secretario'])->name('secretario.dashboard');
+        Route::get('/expedientes',  [SecretarioController::class, 'expedientes'])->name('secretario.expedientes');
     });
 
     Route::middleware('role:miembro_cca')->prefix('cca')->group(function () {

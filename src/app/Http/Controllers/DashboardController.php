@@ -28,7 +28,27 @@ class DashboardController extends Controller
 
     public function secretario(): Response
     {
-        return Inertia::render('Dashboard/Secretario');
+        $user    = auth()->user();
+        $periodo = Periodo::where('estado', 'activo')->latest()->first();
+
+        $stats = ['total' => 0, 'pendientes' => 0, 'con_licencia' => 0];
+
+        if ($periodo && $user->facultad_id) {
+            $nominas = Nomina::where('periodo_id', $periodo->id)
+                ->whereHas('academico', fn ($q) => $q->where('facultad_id', $user->facultad_id))
+                ->get(['estado', 'con_licencia']);
+
+            $stats = [
+                'total'        => $nominas->count(),
+                'pendientes'   => $nominas->where('estado', 'pendiente')->count(),
+                'con_licencia' => $nominas->where('con_licencia', true)->count(),
+            ];
+        }
+
+        return Inertia::render('Dashboard/Secretario', [
+            'stats'   => $stats,
+            'periodo' => $periodo?->only(['nombre', 'anio']),
+        ]);
     }
 
     public function cca(): Response
