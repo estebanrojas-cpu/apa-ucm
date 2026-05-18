@@ -1,4 +1,4 @@
-import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Head, router, useForm, usePage } from '@inertiajs/react';
 import { useState, useMemo } from 'react';
 import AppLayout from '@/Layouts/AppLayout';
 
@@ -23,12 +23,21 @@ const FILTROS_ESTADO = [
     { value: 'cerrado',        label: 'Cerrado' },
 ];
 
-export default function Expedientes({ periodo, expedientes }) {
+function formatDate(dateStr) {
+    if (!dateStr) return '—';
+    const [y, m, d] = dateStr.split('T')[0].split('-');
+    return `${d}/${m}/${y}`;
+}
+
+export default function Expedientes({ periodo, expedientes, plazo }) {
     const { flash, auth } = usePage().props;
     const facultad = auth.user.facultad?.nombre ?? '—';
 
-    const [search,        setSearch]        = useState('');
-    const [filtroEstado,  setFiltroEstado]  = useState('');
+    const [search,       setSearch]       = useState('');
+    const [filtroEstado, setFiltroEstado] = useState('');
+    const [editingPlazo, setEditingPlazo] = useState(false);
+
+    const plazoForm = useForm({ fecha_limite: plazo?.fecha_limite ?? '' });
 
     const filtrados = useMemo(() => {
         const q = search.toLowerCase();
@@ -41,11 +50,23 @@ export default function Expedientes({ periodo, expedientes }) {
         });
     }, [expedientes, search, filtroEstado]);
 
-    // Contadores para las stat cards
     const total      = expedientes.length;
     const pendientes = expedientes.filter(e => e.estado === 'pendiente').length;
     const enRevision = expedientes.filter(e => e.estado === 'en_carga').length;
     const completos  = expedientes.filter(e => e.estado === 'carga_cerrada').length;
+
+    function savePlazo(e) {
+        e.preventDefault();
+        plazoForm.post('/secretario/plazos', {
+            preserveScroll: true,
+            onSuccess: () => setEditingPlazo(false),
+        });
+    }
+
+    function cancelPlazo() {
+        plazoForm.setData('fecha_limite', plazo?.fecha_limite ?? '');
+        setEditingPlazo(false);
+    }
 
     function refresh() {
         router.reload({ preserveScroll: true });
@@ -69,7 +90,7 @@ export default function Expedientes({ periodo, expedientes }) {
             <Head title="Expedientes" />
             <AppLayout title="Expedientes">
 
-                {/* Cabecera: período + facultad */}
+                {/* Cabecera */}
                 <div className="flex items-start justify-between -mt-4 mb-6">
                     <div>
                         <p className="text-sm text-gray-500">
@@ -79,11 +100,9 @@ export default function Expedientes({ periodo, expedientes }) {
                             Facultad: <span className="font-medium text-gray-700">{facultad}</span>
                         </p>
                     </div>
-                    <button
-                        onClick={refresh}
+                    <button onClick={refresh}
                         className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 transition-colors"
-                        title="Actualizar datos"
-                    >
+                        title="Actualizar datos">
                         <RefreshIcon />
                         Actualizar
                     </button>
@@ -94,16 +113,100 @@ export default function Expedientes({ periodo, expedientes }) {
                         {flash.success}
                     </div>
                 )}
+                {flash?.error && (
+                    <div className="mb-5 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                        {flash.error}
+                    </div>
+                )}
+
+                {/* ── Sección plazo de entrega ───────────────────── */}
+                <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <p className="text-sm font-semibold text-gray-700">Plazo de entrega de evidencias</p>
+                            {plazo ? (
+                                <div className="flex items-center gap-2 mt-1">
+                                    <p className="text-sm text-gray-600">
+                                        {formatDate(plazo.fecha_limite)}
+                                    </p>
+                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                        plazo.vigente
+                                            ? 'bg-green-100 text-green-700'
+                                            : 'bg-red-100 text-red-600'
+                                    }`}>
+                                        {plazo.vigente ? 'Vigente' : 'Vencido'}
+                                    </span>
+                                    <span className="text-xs text-gray-400">
+                                        · Configurado el {plazo.actualizado}
+                                    </span>
+                                </div>
+                            ) : (
+                                <p className="text-sm text-gray-400 mt-1">Sin plazo configurado</p>
+                            )}
+                        </div>
+
+                        {!editingPlazo && (
+                            <button
+                                onClick={() => {
+                                    plazoForm.setData('fecha_limite', plazo?.fecha_limite ?? '');
+                                    setEditingPlazo(true);
+                                }}
+                                className="text-sm font-medium text-[#0096D6] hover:underline"
+                            >
+                                {plazo ? 'Modificar plazo' : 'Configurar plazo'}
+                            </button>
+                        )}
+                    </div>
+
+                    {/* Formulario inline */}
+                    {editingPlazo && (
+                        <form onSubmit={savePlazo} className="mt-4 pt-4 border-t border-gray-100">
+                            <div className="flex items-end gap-4">
+                                <div className="flex-1 max-w-xs">
+                                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                                        Nueva fecha límite
+                                    </label>
+                                    <input
+                                        type="date"
+                                        value={plazoForm.data.fecha_limite}
+                                        onChange={e => plazoForm.setData('fecha_limite', e.target.value)}
+                                        className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B2D6B]/30 focus:border-[#1B2D6B]"
+                                        autoFocus
+                                    />
+                                    {plazoForm.errors.fecha_limite && (
+                                        <p className="mt-1 text-xs text-red-600">{plazoForm.errors.fecha_limite}</p>
+                                    )}
+                                </div>
+                                <div className="flex gap-3 pb-0.5">
+                                    <button
+                                        type="submit"
+                                        disabled={plazoForm.processing || !plazoForm.data.fecha_limite}
+                                        className="text-sm font-medium bg-[#1B2D6B] text-white px-4 py-2 rounded-lg hover:bg-[#152558] disabled:opacity-50 transition-colors"
+                                    >
+                                        {plazoForm.processing ? 'Guardando...' : 'Guardar'}
+                                    </button>
+                                    <button type="button" onClick={cancelPlazo}
+                                        className="text-sm text-gray-500 hover:text-gray-700">
+                                        Cancelar
+                                    </button>
+                                </div>
+                            </div>
+                            <p className="mt-2 text-xs text-gray-400">
+                                Los académicos de la facultad serán bloqueados para subir evidencias al vencer esta fecha.
+                            </p>
+                        </form>
+                    )}
+                </div>
 
                 {/* Stats */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-                    <StatCard label="Total"       value={total}      active={!filtroEstado} onClick={() => setFiltroEstado('')} />
-                    <StatCard label="Pendientes"  value={pendientes} active={filtroEstado === 'pendiente'}     onClick={() => setFiltroEstado(f => f === 'pendiente'    ? '' : 'pendiente')} />
-                    <StatCard label="En revisión" value={enRevision} active={filtroEstado === 'en_carga'}      onClick={() => setFiltroEstado(f => f === 'en_carga'     ? '' : 'en_carga')} />
-                    <StatCard label="Completos"   value={completos}  active={filtroEstado === 'carga_cerrada'} onClick={() => setFiltroEstado(f => f === 'carga_cerrada'? '' : 'carga_cerrada')} />
+                    <StatCard label="Total"       value={total}      active={!filtroEstado}                    onClick={() => setFiltroEstado('')} />
+                    <StatCard label="Pendientes"  value={pendientes} active={filtroEstado === 'pendiente'}     onClick={() => setFiltroEstado(f => f === 'pendiente'     ? '' : 'pendiente')} />
+                    <StatCard label="En revisión" value={enRevision} active={filtroEstado === 'en_carga'}      onClick={() => setFiltroEstado(f => f === 'en_carga'      ? '' : 'en_carga')} />
+                    <StatCard label="Completos"   value={completos}  active={filtroEstado === 'carga_cerrada'} onClick={() => setFiltroEstado(f => f === 'carga_cerrada' ? '' : 'carga_cerrada')} />
                 </div>
 
-                {/* Barra de filtros */}
+                {/* Filtros */}
                 <div className="flex flex-col sm:flex-row gap-3 mb-5">
                     <div className="relative flex-1">
                         <SearchIcon />
@@ -126,7 +229,7 @@ export default function Expedientes({ periodo, expedientes }) {
                     </select>
                 </div>
 
-                {/* Tabla de expedientes */}
+                {/* Tabla */}
                 {total === 0 ? (
                     <div className="bg-white rounded-xl border border-dashed border-gray-300 p-10 text-center">
                         <p className="text-gray-400 text-sm">No hay académicos en la nómina de tu facultad para este período.</p>
@@ -194,13 +297,9 @@ export default function Expedientes({ periodo, expedientes }) {
 
 function StatCard({ label, value, active, onClick }) {
     return (
-        <button
-            type="button"
-            onClick={onClick}
+        <button type="button" onClick={onClick}
             className={`rounded-xl border p-4 text-left transition-colors w-full ${
-                active
-                    ? 'border-[#1B2D6B] bg-[#1B2D6B]/5'
-                    : 'border-gray-200 bg-white hover:border-gray-300'
+                active ? 'border-[#1B2D6B] bg-[#1B2D6B]/5' : 'border-gray-200 bg-white hover:border-gray-300'
             }`}
         >
             <p className="text-xs text-gray-500">{label}</p>
