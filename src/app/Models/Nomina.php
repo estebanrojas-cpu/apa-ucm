@@ -14,7 +14,7 @@ class Nomina extends Model
 
     protected $fillable = [
         'periodo_id', 'user_id', 'estado',
-        'con_licencia', 'observacion_licencia',
+        'con_licencia', 'observacion_licencia', 'observacion_secretario',
     ];
 
     protected function casts(): array

@@ -34,9 +34,11 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware('role:secretario')->prefix('secretario')->group(function () {
-        Route::get('/dashboard',   [DashboardController::class,  'secretario'])->name('secretario.dashboard');
-        Route::get('/expedientes', [SecretarioController::class, 'expedientes'])->name('secretario.expedientes');
-        Route::post('/plazos',     [SecretarioController::class, 'storePlazo'])->name('secretario.plazos.store');
+        Route::get('/dashboard',                          [DashboardController::class,  'secretario'])->name('secretario.dashboard');
+        Route::get('/expedientes',                        [SecretarioController::class, 'expedientes'])->name('secretario.expedientes');
+        Route::get('/expedientes/{nomina}',               [SecretarioController::class, 'showExpediente'])->name('secretario.expedientes.show');
+        Route::patch('/expedientes/{nomina}/validar',     [SecretarioController::class, 'validarExpediente'])->name('secretario.expedientes.validar');
+        Route::post('/plazos',                            [SecretarioController::class, 'storePlazo'])->name('secretario.plazos.store');
     });
 
     Route::middleware('role:miembro_cca')->prefix('cca')->group(function () {

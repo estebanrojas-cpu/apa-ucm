@@ -1,4 +1,4 @@
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import { useState, useMemo } from 'react';
 import AppLayout from '@/Layouts/AppLayout';
 
@@ -243,12 +243,13 @@ export default function Expedientes({ periodo, expedientes, plazo }) {
                                     <th className="text-left px-5 py-3 font-semibold text-gray-600">RUT</th>
                                     <th className="text-left px-5 py-3 font-semibold text-gray-600">Estado</th>
                                     <th className="text-left px-5 py-3 font-semibold text-gray-600">Caso especial</th>
+                                    <th className="px-5 py-3"></th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {filtrados.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4} className="px-5 py-8 text-center text-sm text-gray-400">
+                                        <td colSpan={5} className="px-5 py-8 text-center text-sm text-gray-400">
                                             No hay expedientes que coincidan con los filtros aplicados.
                                         </td>
                                     </tr>
@@ -276,6 +277,14 @@ export default function Expedientes({ periodo, expedientes, plazo }) {
                                                 ) : (
                                                     <span className="text-gray-300">—</span>
                                                 )}
+                                            </td>
+                                            <td className="px-5 py-3 text-right">
+                                                <Link
+                                                    href={`/secretario/expedientes/${e.id}`}
+                                                    className="text-xs font-medium text-[#0096D6] hover:underline"
+                                                >
+                                                    Ver detalle
+                                                </Link>
                                             </td>
                                         </tr>
                                     );

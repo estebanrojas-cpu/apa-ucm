@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CategoriaApa;
 use App\Models\Nomina;
 use App\Models\Periodo;
 use App\Models\PlazoFacultad;
@@ -54,6 +55,83 @@ class SecretarioController extends Controller
             'expedientes' => $expedientes->values(),
             'plazo'       => $plazo,
         ]);
+    }
+
+    public function showExpediente(Nomina $nomina): Response
+    {
+        $user = auth()->user();
+
+        if ($nomina->academico->facultad_id !== $user->facultad_id) {
+            abort(403);
+        }
+
+        $categorias = CategoriaApa::orderBy('orden')->get();
+        $evidencias = $nomina->evidenciasNormales()->with('categoria')->get();
+
+        $evidenciasPorCategoria = [];
+        foreach ($evidencias as $ev) {
+            $evidenciasPorCategoria[$ev->categoria_id][] = [
+                'id'             => $ev->id,
+                'nombre_archivo' => $ev->nombre_archivo,
+                'tamano'         => $ev->tamanoFormateado(),
+                'descripcion'    => $ev->descripcion,
+                'created_at'     => $ev->created_at->format('d/m/Y H:i'),
+            ];
+        }
+
+        return Inertia::render('Secretario/ExpedienteDetalle', [
+            'nomina' => [
+                'id'                     => $nomina->id,
+                'estado'                 => $nomina->estado,
+                'con_licencia'           => $nomina->con_licencia,
+                'observacion_licencia'   => $nomina->observacion_licencia,
+                'observacion_secretario' => $nomina->observacion_secretario,
+                'academico'              => [
+                    'name'  => $nomina->academico->name,
+                    'rut'   => $nomina->academico->rut,
+                    'email' => $nomina->academico->email,
+                ],
+            ],
+            'categorias'             => $categorias->map(fn ($c) => [
+                'id'     => $c->id,
+                'nombre' => $c->nombre,
+                'slug'   => $c->slug,
+            ]),
+            'evidenciasPorCategoria' => $evidenciasPorCategoria,
+            'totalEvidencias'        => $evidencias->count(),
+        ]);
+    }
+
+    public function validarExpediente(Request $request, Nomina $nomina)
+    {
+        $user = auth()->user();
+
+        if ($nomina->academico->facultad_id !== $user->facultad_id) {
+            abort(403);
+        }
+
+        if (!in_array($nomina->estado, ['pendiente', 'en_carga'])) {
+            return back()->with('error', 'El expediente no está en un estado que permita validación.');
+        }
+
+        $data = $request->validate([
+            'accion'      => ['required', 'in:completo,observaciones'],
+            'observacion' => ['nullable', 'string', 'max:1000'],
+        ], [
+            'accion.required' => 'Debe seleccionar una acción.',
+            'accion.in'       => 'Acción no válida.',
+        ]);
+
+        if ($data['accion'] === 'completo') {
+            $nomina->update([
+                'estado'                 => 'carga_cerrada',
+                'observacion_secretario' => null,
+            ]);
+            return back()->with('success', 'Expediente marcado como completo. Ya está disponible para la CCA.');
+        }
+
+        $nomina->update(['observacion_secretario' => $data['observacion'] ?? null]);
+        return back()->with('success', 'Observaciones registradas en el expediente.');
     }
 
     public function storePlazo(Request $request)
