@@ -30,21 +30,29 @@ class StorePeriodoRequest extends FormRequest
 
             if (!$inicio || !$cierre) return;
 
+            $finEtapaAnterior = null;
+
             foreach ($cronograma as $i => $entry) {
                 $eInicio = $entry['fecha_inicio'] ?? null;
                 $eFin    = $entry['fecha_fin'] ?? null;
 
                 if ($eInicio && ($eInicio < $inicio || $eInicio > $cierre)) {
-                    $v->errors()->add(
-                        "cronograma.$i.fecha_inicio",
-                        'Debe estar dentro del período principal.'
-                    );
+                    $v->errors()->add("cronograma.$i.fecha_inicio", 'Debe estar dentro del período principal.');
                 }
                 if ($eFin && ($eFin < $inicio || $eFin > $cierre)) {
+                    $v->errors()->add("cronograma.$i.fecha_fin", 'Debe estar dentro del período principal.');
+                }
+
+                // Cada etapa debe comenzar después del fin de la etapa anterior
+                if ($i > 0 && $eInicio && $finEtapaAnterior && $eInicio < $finEtapaAnterior) {
                     $v->errors()->add(
-                        "cronograma.$i.fecha_fin",
-                        'Debe estar dentro del período principal.'
+                        "cronograma.$i.fecha_inicio",
+                        'Esta etapa debe comenzar después del fin de la etapa anterior (' . $finEtapaAnterior . ').'
                     );
+                }
+
+                if ($eFin) {
+                    $finEtapaAnterior = $eFin;
                 }
             }
         });

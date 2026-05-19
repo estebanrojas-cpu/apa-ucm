@@ -101,37 +101,47 @@ export default function PeriodoCreate() {
                         )}
 
                         <div className="space-y-4">
-                            {ETAPAS.map((etapa, i) => (
-                                <div key={etapa.value}>
-                                    <p className="text-sm font-medium text-gray-700 mb-2">{etapa.label}</p>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-xs text-gray-500 mb-1">Inicio</label>
-                                            <input
-                                                type="date"
-                                                value={data.cronograma[i].fecha_inicio}
-                                                onChange={e => setCronograma(i, 'fecha_inicio', e.target.value)}
-                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B2D6B]/30 focus:border-[#1B2D6B]"
-                                            />
-                                            {cronError(i, 'fecha_inicio') && (
-                                                <p className="mt-1 text-xs text-red-600">{cronError(i, 'fecha_inicio')}</p>
-                                            )}
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs text-gray-500 mb-1">Fin</label>
-                                            <input
-                                                type="date"
-                                                value={data.cronograma[i].fecha_fin}
-                                                onChange={e => setCronograma(i, 'fecha_fin', e.target.value)}
-                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B2D6B]/30 focus:border-[#1B2D6B]"
-                                            />
-                                            {cronError(i, 'fecha_fin') && (
-                                                <p className="mt-1 text-xs text-red-600">{cronError(i, 'fecha_fin')}</p>
-                                            )}
+                            {ETAPAS.map((etapa, i) => {
+                                const finAnterior = i > 0 ? data.cronograma[i - 1].fecha_fin : data.fecha_inicio;
+                                const minInicio   = finAnterior || data.fecha_inicio || undefined;
+                                const minFin      = data.cronograma[i].fecha_inicio || minInicio;
+
+                                return (
+                                    <div key={etapa.value}>
+                                        <p className="text-sm font-medium text-gray-700 mb-2">{etapa.label}</p>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-xs text-gray-500 mb-1">Inicio</label>
+                                                <input
+                                                    type="date"
+                                                    value={data.cronograma[i].fecha_inicio}
+                                                    min={minInicio}
+                                                    max={data.fecha_cierre || undefined}
+                                                    onChange={e => setCronograma(i, 'fecha_inicio', e.target.value)}
+                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B2D6B]/30 focus:border-[#1B2D6B]"
+                                                />
+                                                {cronError(i, 'fecha_inicio') && (
+                                                    <p className="mt-1 text-xs text-red-600">{cronError(i, 'fecha_inicio')}</p>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <label className="block text-xs text-gray-500 mb-1">Fin</label>
+                                                <input
+                                                    type="date"
+                                                    value={data.cronograma[i].fecha_fin}
+                                                    min={minFin}
+                                                    max={data.fecha_cierre || undefined}
+                                                    onChange={e => setCronograma(i, 'fecha_fin', e.target.value)}
+                                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B2D6B]/30 focus:border-[#1B2D6B]"
+                                                />
+                                                {cronError(i, 'fecha_fin') && (
+                                                    <p className="mt-1 text-xs text-red-600">{cronError(i, 'fecha_fin')}</p>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     </section>
 
