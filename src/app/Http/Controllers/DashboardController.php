@@ -90,15 +90,22 @@ class DashboardController extends Controller
         $stats = ['evidencias_cargadas' => 0, 'estado_nomina' => null];
 
         if ($periodo) {
-            $nomina = Nomina::with('evidenciasNormales')
+            $nomina = Nomina::with(['evidenciasNormales', 'calificacionFinal'])
                 ->where('periodo_id', $periodo->id)
                 ->where('user_id', $user->id)
                 ->first();
 
             if ($nomina) {
+                $cf = $nomina->calificacionFinal;
                 $stats = [
                     'evidencias_cargadas' => $nomina->evidenciasNormales->count(),
                     'estado_nomina'       => $nomina->estado,
+                    'calificacion'        => $cf ? [
+                        'puntaje_total' => $cf->puntaje_total,
+                        'calificacion'  => $cf->calificacion,
+                        'label'         => $cf->calificacionLabel(),
+                        'fecha'         => $cf->fecha->format('d/m/Y'),
+                    ] : null,
                 ];
             }
         }

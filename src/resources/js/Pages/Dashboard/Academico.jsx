@@ -9,8 +9,16 @@ const estadoLabels = {
     cerrado:       { label: 'Cerrado',       color: 'text-gray-700 bg-gray-100' },
 };
 
+const califColors = {
+    muy_bueno:  'text-green-700',
+    bueno:      'text-blue-700',
+    aceptable:  'text-amber-700',
+    deficiente: 'text-red-700',
+};
+
 export default function Academico({ stats, periodo }) {
-    const estado = estadoLabels[stats?.estado_nomina];
+    const estado     = estadoLabels[stats?.estado_nomina];
+    const calificacion = stats?.calificacion ?? null;
 
     return (
         <>
@@ -36,8 +44,34 @@ export default function Academico({ stats, periodo }) {
                                 : '—'
                         }
                     />
-                    <StatCard label="Calificación final" value="—" />
+                    <StatCard
+                        label="Calificación final"
+                        value={
+                            calificacion
+                                ? <span className={`text-xl font-bold ${califColors[calificacion.calificacion] ?? 'text-gray-900'}`}>
+                                    {calificacion.label}
+                                  </span>
+                                : '—'
+                        }
+                    />
                 </div>
+
+                {/* Banner de calificación cuando está disponible */}
+                {calificacion && (
+                    <div className="bg-green-50 border border-green-200 rounded-xl p-5 mb-6">
+                        <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-1">
+                            Calificación APA — Resultado final
+                        </p>
+                        <p className={`text-3xl font-bold ${califColors[calificacion.calificacion]}`}>
+                            {calificacion.label}
+                        </p>
+                        <p className="text-sm text-green-700 mt-1">
+                            Puntaje: <span className="font-semibold">{calificacion.puntaje_total} / 100</span>
+                            <span className="mx-2 text-green-400">·</span>
+                            Registrada el {calificacion.fecha}
+                        </p>
+                    </div>
+                )}
 
                 <div className="bg-white rounded-xl border border-gray-200 p-6 flex items-center justify-between">
                     <div>
