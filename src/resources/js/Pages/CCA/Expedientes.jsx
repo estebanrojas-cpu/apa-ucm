@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import AppLayout from '@/Layouts/AppLayout';
 
 const ESTADOS = {
@@ -14,7 +14,9 @@ const CALIFICACIONES = {
     deficiente: { label: 'Deficiente', cls: 'text-red-700' },
 };
 
-export default function Expedientes({ periodo, expedientes }) {
+export default function Expedientes({ periodo, expedientes, evaluacionHabilitada, fechaAperturaEval }) {
+    const { flash } = usePage().props;
+
     return (
         <>
             <Head title="Expedientes CCA" />
@@ -25,11 +27,34 @@ export default function Expedientes({ periodo, expedientes }) {
                     </p>
                 )}
 
-                {expedientes.length === 0 ? (
+                {flash?.error && (
+                    <div className="mb-5 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                        {flash.error}
+                    </div>
+                )}
+
+                {/* Bloqueo por cronograma */}
+                {!evaluacionHabilitada && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
+                        <p className="text-amber-800 font-semibold text-sm mb-1">
+                            Período de entrega de evidencias aún vigente
+                        </p>
+                        <p className="text-amber-700 text-sm">
+                            La evaluación se habilitará cuando cierre la etapa de carga de evidencias
+                            {fechaAperturaEval && (
+                                <span className="font-semibold"> ({fechaAperturaEval})</span>
+                            )}.
+                        </p>
+                    </div>
+                )}
+
+                {evaluacionHabilitada && expedientes.length === 0 && (
                     <div className="bg-white rounded-xl border border-dashed border-gray-300 p-12 text-center">
                         <p className="text-gray-400 text-sm">No hay expedientes disponibles para evaluación en este período.</p>
                     </div>
-                ) : (
+                )}
+
+                {evaluacionHabilitada && expedientes.length > 0 && (
                     <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
                         <table className="w-full text-sm">
                             <thead>
@@ -44,8 +69,8 @@ export default function Expedientes({ periodo, expedientes }) {
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {expedientes.map(exp => {
-                                    const badge   = ESTADOS[exp.estado] ?? { label: exp.estado, cls: 'bg-gray-100 text-gray-600' };
-                                    const calif   = CALIFICACIONES[exp.calificacion];
+                                    const badge = ESTADOS[exp.estado] ?? { label: exp.estado, cls: 'bg-gray-100 text-gray-600' };
+                                    const calif = CALIFICACIONES[exp.calificacion];
                                     return (
                                         <tr key={exp.id} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-5 py-3.5">

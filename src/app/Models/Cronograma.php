@@ -30,6 +30,11 @@ class Cronograma extends Model
             && $this->fecha_fin->toDateString() >= $hoy;
     }
 
+    public function haTerminado(): bool
+    {
+        return $this->fecha_fin->toDateString() < now()->toDateString();
+    }
+
     public function esFutura(): bool
     {
         return $this->fecha_inicio->isFuture();

@@ -40,6 +40,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/expedientes',                                              [SecretarioController::class, 'expedientes'])->name('secretario.expedientes');
         Route::get('/expedientes/{nomina}',                                     [SecretarioController::class, 'showExpediente'])->name('secretario.expedientes.show');
         Route::patch('/expedientes/{nomina}/validar',                           [SecretarioController::class, 'validarExpediente'])->name('secretario.expedientes.validar');
+        Route::patch('/expedientes/{nomina}/reabrir',                           [SecretarioController::class, 'reabrirExpediente'])->name('secretario.expedientes.reabrir');
         Route::get('/expedientes/{nomina}/evidencias/{evidencia}/descargar',    [SecretarioController::class, 'downloadEvidencia'])->name('secretario.evidencias.download');
         Route::patch('/apelaciones/{apelacion}/resolver',                       [ApelacionController::class,  'resolver'])->name('secretario.apelaciones.resolver');
         Route::patch('/apelaciones/{apelacion}/cerrar',                         [ApelacionController::class,  'cerrar'])->name('secretario.apelaciones.cerrar');

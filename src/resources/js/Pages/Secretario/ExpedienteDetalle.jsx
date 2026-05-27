@@ -23,7 +23,16 @@ const CALIFICACIONES = {
 export default function ExpedienteDetalle({ nomina, categorias, evidenciasPorCategoria, totalEvidencias, apelacion, calificacionFinal }) {
     const { flash } = usePage().props;
     const badge = ESTADOS[nomina.estado] ?? { label: nomina.estado, cls: 'bg-gray-100 text-gray-600' };
-    const puedeValidar = PUEDE_VALIDAR.includes(nomina.estado);
+    const puedeValidar  = PUEDE_VALIDAR.includes(nomina.estado);
+    const puedeReabrir  = nomina.estado === 'carga_cerrada';
+
+    const reabrirForm = useForm({});
+
+    function submitReabrir(e) {
+        e.preventDefault();
+        if (!confirm('¿Seguro que desea reabrir este expediente? El académico podrá cargar nuevamente.')) return;
+        reabrirForm.patch(`/secretario/expedientes/${nomina.id}/reabrir`, { preserveScroll: true });
+    }
 
     const { data, setData, patch, processing, errors } = useForm({
         accion:      'completo',
@@ -229,6 +238,19 @@ export default function ExpedienteDetalle({ nomina, categorias, evidenciasPorCat
                             <p className="text-sm text-amber-800">{nomina.observacion_secretario}</p>
                         </div>
                     )
+                )}
+
+                {/* Reabrir expediente */}
+                {puedeReabrir && (
+                    <form onSubmit={submitReabrir} className="mt-4">
+                        <button
+                            type="submit"
+                            disabled={reabrirForm.processing}
+                            className="text-sm text-amber-700 border border-amber-300 bg-amber-50 hover:bg-amber-100 px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-40"
+                        >
+                            {reabrirForm.processing ? 'Reabriendo...' : 'Reabrir expediente para carga'}
+                        </button>
+                    </form>
                 )}
 
                 {/* Calificación final (solo lectura) */}

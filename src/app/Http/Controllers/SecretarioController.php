@@ -129,6 +129,23 @@ class SecretarioController extends Controller
         ];
     }
 
+    public function reabrirExpediente(Nomina $nomina)
+    {
+        $user = auth()->user();
+
+        if ($nomina->academico->facultad_id !== $user->facultad_id) {
+            abort(403);
+        }
+
+        if ($nomina->estado !== 'carga_cerrada') {
+            return back()->with('error', 'Solo se pueden reabrir expedientes marcados como completos.');
+        }
+
+        $nomina->update(['estado' => 'en_carga']);
+
+        return back()->with('success', 'Expediente reabierto. El académico puede cargar nuevamente.');
+    }
+
     public function validarExpediente(Request $request, Nomina $nomina)
     {
         $user = auth()->user();

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CalificacionFinal;
 use App\Models\CategoriaApa;
+use App\Models\Cronograma;
 use App\Models\Evaluacion;
 use App\Models\Evidencia;
 use App\Models\Nomina;
@@ -21,33 +22,46 @@ class EvaluacionController extends Controller
         $user    = auth()->user();
         $periodo = Periodo::where('estado', 'activo')->latest()->first();
 
-        $expedientes = collect();
+        $expedientes        = collect();
+        $evaluacionHabilitada = false;
+        $fechaAperturaEval  = null;
 
         if ($periodo && $user->facultad_id) {
-            $expedientes = Nomina::with(['academico', 'evaluaciones', 'calificacionFinal'])
-                ->where('periodo_id', $periodo->id)
-                ->whereHas('academico', fn ($q) => $q->where('facultad_id', $user->facultad_id))
-                ->whereIn('estado', ['carga_cerrada', 'en_evaluacion', 'evaluado'])
-                ->orderBy('created_at')
-                ->get()
-                ->map(fn ($n) => [
-                    'id'              => $n->id,
-                    'estado'          => $n->estado,
-                    'con_licencia'    => $n->con_licencia,
-                    'academico'       => [
-                        'name' => $n->academico->name,
-                        'rut'  => $n->academico->rut,
-                    ],
-                    'yo_evalué'       => $n->evaluaciones->contains('evaluador_id', $user->id),
-                    'n_evaluaciones'  => $n->evaluaciones->count(),
-                    'calificacion'    => $n->calificacionFinal?->calificacion,
-                    'puntaje_total'   => $n->calificacionFinal?->puntaje_total,
-                ]);
+            $etapaCarga = Cronograma::where('periodo_id', $periodo->id)
+                ->where('etapa', 'carga_evidencias')
+                ->first();
+
+            $evaluacionHabilitada = $etapaCarga && $etapaCarga->haTerminado();
+            $fechaAperturaEval    = $etapaCarga?->fecha_fin->format('d/m/Y');
+
+            if ($evaluacionHabilitada) {
+                $expedientes = Nomina::with(['academico', 'evaluaciones', 'calificacionFinal'])
+                    ->where('periodo_id', $periodo->id)
+                    ->whereHas('academico', fn ($q) => $q->where('facultad_id', $user->facultad_id))
+                    ->whereIn('estado', ['carga_cerrada', 'en_evaluacion', 'evaluado'])
+                    ->orderBy('created_at')
+                    ->get()
+                    ->map(fn ($n) => [
+                        'id'             => $n->id,
+                        'estado'         => $n->estado,
+                        'con_licencia'   => $n->con_licencia,
+                        'academico'      => [
+                            'name' => $n->academico->name,
+                            'rut'  => $n->academico->rut,
+                        ],
+                        'yo_evalué'      => $n->evaluaciones->contains('evaluador_id', $user->id),
+                        'n_evaluaciones' => $n->evaluaciones->count(),
+                        'calificacion'   => $n->calificacionFinal?->calificacion,
+                        'puntaje_total'  => $n->calificacionFinal?->puntaje_total,
+                    ]);
+            }
         }
 
         return Inertia::render('CCA/Expedientes', [
-            'periodo'     => $periodo?->only(['id', 'anio', 'nombre']),
-            'expedientes' => $expedientes->values(),
+            'periodo'               => $periodo?->only(['id', 'anio', 'nombre']),
+            'expedientes'           => $expedientes->values(),
+            'evaluacionHabilitada'  => $evaluacionHabilitada,
+            'fechaAperturaEval'     => $fechaAperturaEval,
         ]);
     }
 
@@ -61,6 +75,15 @@ class EvaluacionController extends Controller
 
         if (!in_array($nomina->estado, ['carga_cerrada', 'en_evaluacion', 'evaluado'])) {
             abort(403);
+        }
+
+        $etapaCarga = Cronograma::where('periodo_id', $nomina->periodo_id)
+            ->where('etapa', 'carga_evidencias')
+            ->first();
+
+        if ($etapaCarga && !$etapaCarga->haTerminado()) {
+            return redirect()->route('cca.expedientes')
+                ->with('error', 'La evaluación se habilita cuando cierre el período de entrega de evidencias ('.$etapaCarga->fecha_fin->format('d/m/Y').').');
         }
 
         $apelacion   = $nomina->apelacion;
