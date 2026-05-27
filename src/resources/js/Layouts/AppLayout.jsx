@@ -22,7 +22,8 @@ const navByRole = {
         { label: 'Expedientes', href: '/secretario/expedientes', icon: 'folder' },
     ],
     miembro_cca: [
-        { label: 'Dashboard', href: '/cca/dashboard', icon: 'grid' },
+        { label: 'Dashboard',   href: '/cca/dashboard',   icon: 'grid' },
+        { label: 'Expedientes', href: '/cca/expedientes', icon: 'folder' },
     ],
     jefe_academico: [
         { label: 'Dashboard', href: '/jefe/dashboard', icon: 'grid' },

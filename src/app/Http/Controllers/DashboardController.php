@@ -53,7 +53,28 @@ class DashboardController extends Controller
 
     public function cca(): Response
     {
-        return Inertia::render('Dashboard/MiembroCCA');
+        $user    = auth()->user();
+        $periodo = Periodo::where('estado', 'activo')->latest()->first();
+
+        $stats = ['pendientes' => 0, 'en_evaluacion' => 0, 'evaluados' => 0];
+
+        if ($periodo && $user->facultad_id) {
+            $nominas = Nomina::where('periodo_id', $periodo->id)
+                ->whereHas('academico', fn ($q) => $q->where('facultad_id', $user->facultad_id))
+                ->whereIn('estado', ['carga_cerrada', 'en_evaluacion', 'evaluado'])
+                ->get(['estado']);
+
+            $stats = [
+                'pendientes'    => $nominas->where('estado', 'carga_cerrada')->count(),
+                'en_evaluacion' => $nominas->where('estado', 'en_evaluacion')->count(),
+                'evaluados'     => $nominas->where('estado', 'evaluado')->count(),
+            ];
+        }
+
+        return Inertia::render('Dashboard/MiembroCCA', [
+            'stats'   => $stats,
+            'periodo' => $periodo?->only(['nombre', 'anio']),
+        ]);
     }
 
     public function jefe(): Response

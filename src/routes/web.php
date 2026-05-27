@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EvaluacionController;
 use App\Http\Controllers\EvidenciaController;
 use App\Http\Controllers\NominaController;
 use App\Http\Controllers\PeriodoController;
@@ -44,7 +45,12 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware('role:miembro_cca')->prefix('cca')->group(function () {
-        Route::get('/dashboard', [DashboardController::class, 'cca'])->name('cca.dashboard');
+        Route::get('/dashboard',                                    [DashboardController::class,  'cca'])->name('cca.dashboard');
+        Route::get('/expedientes',                                  [EvaluacionController::class, 'index'])->name('cca.expedientes');
+        Route::get('/expedientes/{nomina}',                                         [EvaluacionController::class, 'show'])->name('cca.expedientes.show');
+        Route::post('/expedientes/{nomina}/evaluar',                               [EvaluacionController::class, 'store'])->name('cca.expedientes.evaluar');
+        Route::post('/expedientes/{nomina}/finalizar',                             [EvaluacionController::class, 'finalize'])->name('cca.expedientes.finalizar');
+        Route::get('/expedientes/{nomina}/evidencias/{evidencia}/descargar',       [EvaluacionController::class, 'downloadEvidencia'])->name('cca.evidencias.download');
     });
 
     Route::middleware('role:jefe_academico')->prefix('jefe')->group(function () {
