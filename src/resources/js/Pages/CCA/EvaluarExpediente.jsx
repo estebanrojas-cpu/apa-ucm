@@ -130,10 +130,10 @@ export default function EvaluarExpediente({
                         <Info label="Nombre" value={ac.name} />
                         <Info label="RUT" value={ac.rut} />
                         <Info label="Facultad" value={ac.facultad} />
-                        <Info label="Departamento" value={ac.departamento} />
                         <Info label="Categoría académica" value={ac.categoria_academica} />
                         <Info label="Línea de desarrollo" value={ac.linea_desarrollo} />
-                        <Info label="Jerarquización" value={ac.fecha_jerarquizacion} />
+                        <Info label="Horas I semestre" value={ac.horas_contrato_isem ? `${ac.horas_contrato_isem} hrs` : '—'} />
+                        <Info label="Horas II semestre" value={ac.horas_contrato_iisem ? `${ac.horas_contrato_iisem} hrs` : '—'} />
                         <Info label="Calificación anterior" value={
                             ac.nota_anterior
                                 ? `${Number(ac.nota_anterior).toFixed(1)} — ${ac.concepto_anterior ?? ''}`

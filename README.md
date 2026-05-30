@@ -138,7 +138,7 @@ Todos los usuarios tienen contraseña `password`.
 
 ### E5 · Evaluación CCA
 - **HU-014** — Revisión del expediente completo por miembro CCA
-- **HU-015** — Determinación de calificación final (muy bueno / bueno / aceptable / deficiente)
+- **HU-015** — Determinación de calificación final (Excelente / Muy Bueno / Bueno / Regular / Deficiente)
 - **HU-016** — Informe PDF de calificación por académico
 
 ### E6 · Apelaciones
