@@ -46,8 +46,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/periodos/{periodo}/nominas/preview-excel',  [NominaController::class,  'previewExcel'])->name('analista.periodos.nominas.preview-excel');
         Route::post('/periodos/{periodo}/nominas/importar-excel', [NominaController::class,  'importarExcel'])->name('analista.periodos.nominas.importar-excel');
         Route::post('/periodos/{periodo}/nominas/agregar',        [NominaController::class,  'agregarIndividual'])->name('analista.periodos.nominas.agregar');
-        Route::get('/periodos/{periodo}/nominas/exportar',        [NominaController::class,  'exportar'])->name('analista.periodos.nominas.exportar');
-        Route::get('/periodos/{periodo}/cronograma/pdf',          [PeriodoController::class, 'imprimirCronograma'])->name('analista.periodos.cronograma.pdf');
+        Route::get('/periodos/{periodo}/nominas/exportar',             [NominaController::class,  'exportar'])->name('analista.periodos.nominas.exportar');
+        Route::get('/periodos/{periodo}/nominas/{nomina}/detalle',    [NominaController::class,  'detalle'])->name('analista.periodos.nominas.detalle');
+        Route::get('/nominas/plantilla',                               [NominaController::class,  'plantilla'])->name('analista.nominas.plantilla');
+        Route::get('/periodos/{periodo}/cronograma/pdf',               [PeriodoController::class, 'imprimirCronograma'])->name('analista.periodos.cronograma.pdf');
 
         Route::patch('/nominas/{nomina}/licencia', [NominaController::class, 'toggleLicencia'])->name('analista.nominas.licencia');
 

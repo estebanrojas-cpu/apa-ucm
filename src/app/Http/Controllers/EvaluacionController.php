@@ -10,6 +10,7 @@ use App\Models\Evidencia;
 use App\Models\Nomina;
 use App\Models\Notificacion;
 use App\Models\Periodo;
+use App\Models\PlazoFacultad;
 use App\Services\CalificacionCadService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -34,7 +35,12 @@ class EvaluacionController extends Controller
                 ->where('etapa', 'carga_evidencias')
                 ->first();
 
-            $evaluacionHabilitada = $etapaCarga && $etapaCarga->haTerminado();
+            $plazo = PlazoFacultad::where('periodo_id', $periodo->id)
+                ->where('facultad_id', $user->facultad_id)
+                ->first();
+
+            $recepcionCerrada     = $plazo && $plazo->estaCerradoFormalmente();
+            $evaluacionHabilitada = $recepcionCerrada || ($etapaCarga && $etapaCarga->haTerminado());
             $fechaAperturaEval    = $etapaCarga?->fecha_fin->format('d/m/Y');
 
             if ($evaluacionHabilitada) {
@@ -64,7 +70,7 @@ class EvaluacionController extends Controller
                             ],
                             'facultad'          => $n->academico->facultad?->nombre,
                             'categoria'         => CalificacionCadService::labelCategoria(
-                                $n->academico->categoria_academica
+                                $n->categoriaEfectiva()
                             ),
                             'yo_evaluado'       => $yoEvaluado,
                             'n_evaluaciones'    => $n->evaluaciones->count(),
@@ -101,7 +107,13 @@ class EvaluacionController extends Controller
             ->where('etapa', 'carga_evidencias')
             ->first();
 
-        if ($etapaCarga && !$etapaCarga->haTerminado()) {
+        $plazo = PlazoFacultad::where('periodo_id', $nomina->periodo_id)
+            ->where('facultad_id', $user->facultad_id)
+            ->first();
+
+        $recepcionCerrada = $plazo && $plazo->estaCerradoFormalmente();
+
+        if (!$recepcionCerrada && $etapaCarga && !$etapaCarga->haTerminado()) {
             return redirect()->route('cca.expedientes')
                 ->with('error', 'La evaluación se habilita cuando cierre el período de entrega de evidencias ('.$etapaCarga->fecha_fin->format('d/m/Y').').');
         }
@@ -135,7 +147,8 @@ class EvaluacionController extends Controller
             ->first();
 
         $academico = $nomina->academico;
-        $categoria = $academico->categoria_academica ?? 'adjunto';
+        // Categoría: primero del campo SAPD de la nómina, luego del perfil del usuario
+        $categoria = $nomina->categoriaEfectiva();
         $pesos     = CalificacionCadService::pesosParaCategoria($categoria);
 
         $categoriasConPeso = $categorias->map(fn ($c) => [
@@ -169,14 +182,15 @@ class EvaluacionController extends Controller
                     'email'                 => $academico->email,
                     'facultad'              => $academico->facultad?->nombre,
                     'departamento'          => $academico->departamento?->nombre,
-                    'categoria_academica'   => CalificacionCadService::labelCategoria($academico->categoria_academica),
+                    'categoria_academica'   => CalificacionCadService::labelCategoria($categoria),
                     'categoria_key'         => $categoria,
                     'linea_desarrollo'      => CalificacionCadService::labelLinea($academico->linea_desarrollo),
                     'fecha_jerarquizacion'  => $academico->fecha_jerarquizacion?->format('d/m/Y'),
+                    'horas_contrato'        => $nomina->horas_contrato ?? $academico->horas_contrato_isem,
                     'horas_contrato_isem'   => $academico->horas_contrato_isem,
                     'horas_contrato_iisem'  => $academico->horas_contrato_iisem,
-                    'nota_anterior'         => $academico->nota_anterior,
-                    'concepto_anterior'     => $academico->concepto_anterior,
+                    'nota_anterior'         => $nomina->notaAnterior(),
+                    'concepto_anterior'     => $nomina->conceptoAnterior(),
                 ],
             ],
             'categorias'             => $categoriasConPeso,
@@ -259,7 +273,7 @@ class EvaluacionController extends Controller
             ->where('es_apelacion', $esApelacion)
             ->first();
 
-        $categoria = $nomina->academico->categoria_academica ?? 'adjunto';
+        $categoria = $nomina->categoriaEfectiva();
         $notaFinal = $evaluacion->notaFinalCad($categoria);
         $concepto  = CalificacionCadService::labelConcepto(
             CalificacionCadService::conceptoDesdeNota($notaFinal)
@@ -298,7 +312,7 @@ class EvaluacionController extends Controller
         $esApelacion = $calificacion->es_apelacion;
         $nomina->load(['academico.facultad', 'academico.departamento']);
         $academico = $nomina->academico;
-        $categoria = $academico->categoria_academica ?? 'adjunto';
+        $categoria = $nomina->categoriaEfectiva();
         $pesos     = CalificacionCadService::pesosParaCategoria($categoria);
         $categorias = CategoriaApa::orderBy('orden')->get();
 
@@ -307,7 +321,9 @@ class EvaluacionController extends Controller
             ->where('es_apelacion', $esApelacion)
             ->get();
 
-        $areas = $categorias->map(function ($cat) use ($pesos, $evaluaciones, $academico) {
+        $horasBase = $nomina->horas_contrato ?? $academico->horas_contrato_isem ?? 0;
+
+        $areas = $categorias->map(function ($cat) use ($pesos, $evaluaciones, $academico, $horasBase) {
             $slugReg     = CalificacionCadService::SLUG_A_REGLAMENTO[$cat->slug] ?? $cat->slug;
             $campo       = CalificacionCadService::CAMPOS[$slugReg] ?? null;
             $peso        = (float) ($pesos[$slugReg] ?? 0);
@@ -316,8 +332,8 @@ class EvaluacionController extends Controller
                 : 0.0;
             $concepto    = $nota > 0 ? CalificacionCadService::conceptoDesdeNota($nota) : null;
             $ponderacion = round(($peso * $nota) / 100, 2);
-            $horasIsem   = $peso > 0 ? round(($peso * ($academico->horas_contrato_isem ?? 0)) / 100, 1) : 0;
-            $horasIisem  = $peso > 0 ? round(($peso * ($academico->horas_contrato_iisem ?? 0)) / 100, 1) : 0;
+            $horasIsem   = $peso > 0 ? round(($peso * $horasBase) / 100, 1) : 0;
+            $horasIisem  = $peso > 0 ? round(($peso * ($academico->horas_contrato_iisem ?? $horasBase)) / 100, 1) : 0;
 
             return [
                 'nombre'      => $cat->nombre,
@@ -366,7 +382,7 @@ class EvaluacionController extends Controller
             'observacion' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $categoria = $nomina->academico->categoria_academica ?? 'adjunto';
+        $categoria = $nomina->categoriaEfectiva();
 
         $notasCad = $evaluaciones->map(
             fn ($e) => CalificacionCadService::calcularDesdeEvaluacion($e, $categoria)

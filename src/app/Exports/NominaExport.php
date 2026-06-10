@@ -13,12 +13,17 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 class NominaExport implements FromCollection, WithHeadings, WithStyles, WithColumnWidths
 {
     public function __construct(
-        private readonly Periodo $periodo,
-        private readonly ?string $facultadId = null,
+        private readonly ?Periodo $periodo,
+        private readonly ?string  $facultadId = null,
+        private readonly bool     $soloPlantilla = false,
     ) {}
 
     public function collection()
     {
+        if ($this->soloPlantilla || !$this->periodo) {
+            return collect();
+        }
+
         return Nomina::with(['academico.facultad'])
             ->where('periodo_id', $this->periodo->id)
             ->when($this->facultadId, fn ($q) =>
@@ -29,31 +34,39 @@ class NominaExport implements FromCollection, WithHeadings, WithStyles, WithColu
             ->orderBy('created_at')
             ->get()
             ->map(fn (Nomina $n) => [
-                $n->academico->rut                ?? '—',
-                $n->academico->name               ?? '—',
-                $n->academico->email              ?? '—',
-                $n->academico->facultad?->nombre  ?? '—',
-                $n->academico->facultad?->codigo  ?? '—',
-                ucfirst($n->academico->categoria_academica ?? '—'),
-                $n->academico->horas_contrato_isem  ?? '—',
-                $n->academico->horas_contrato_iisem ?? '—',
+                $n->numero_personal                             ?? '—',
+                $n->rut   ?? $n->academico?->rut               ?? '—',
+                $n->nombre ?? $n->academico?->name             ?? '—',
+                $n->adscripcion_academica                       ?? '—',
+                $n->unidad_superior ?? $n->academico?->facultad?->nombre ?? '—',
+                $n->unidad                                      ?? '—',
+                $n->nombre_posicion                             ?? '—',
+                $n->tipo_trabajador                             ?? '—',
+                $n->fecha_inicio_contrato?->format('d/m/Y')    ?? '—',
+                $n->horas_contrato                              ?? '—',
+                $n->categoria ?? $n->academico?->categoria_academica ?? '—',
+                $n->fecha_categorizacion?->format('d/m/Y')     ?? '—',
                 ucfirst($n->estado),
                 $n->con_licencia ? 'Sí' : 'No',
-                $n->observacion_licencia ?? '—',
+                $n->observacion_licencia                        ?? '—',
             ]);
     }
 
     public function headings(): array
     {
         return [
-            'RUT',
-            'Nombre',
-            'Email',
-            'Facultad',
-            'Código Facultad',
-            'Categoría Académica',
-            'Horas Contrato I Sem',
-            'Horas Contrato II Sem',
+            'N° Personal',
+            'Cédula de Identidad',
+            'Nombre del Trabajador',
+            'Adscripción Académica',
+            'Unidad Superior',
+            'Unidad',
+            'Nombre de la Posición',
+            'Tipo de Trabajador',
+            'Fecha de Inicio de Contrato',
+            'Horas de Contrato',
+            'Categoría 2025',
+            'Fecha Categoría 2025',
             'Estado',
             'Con Licencia',
             'Observación Licencia',
@@ -70,9 +83,10 @@ class NominaExport implements FromCollection, WithHeadings, WithStyles, WithColu
     public function columnWidths(): array
     {
         return [
-            'A' => 16, 'B' => 30, 'C' => 28, 'D' => 30,
-            'E' => 14, 'F' => 20, 'G' => 20, 'H' => 20,
-            'I' => 14, 'J' => 14, 'K' => 30,
+            'A' => 16, 'B' => 20, 'C' => 30, 'D' => 22,
+            'E' => 28, 'F' => 22, 'G' => 26, 'H' => 18,
+            'I' => 22, 'J' => 14, 'K' => 16, 'L' => 20,
+            'M' => 14, 'N' => 14, 'O' => 30,
         ];
     }
 }

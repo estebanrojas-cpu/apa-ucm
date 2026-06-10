@@ -5,9 +5,12 @@ namespace App\Http\Controllers;
 use App\Exports\NominaExport;
 use App\Http\Requests\StoreNominaRequest;
 use App\Models\Facultad;
+use App\Models\HistorialCalificacion;
+use App\Models\HistorialCategoria;
 use App\Models\Nomina;
 use App\Models\Periodo;
 use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -19,6 +22,111 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class NominaController extends Controller
 {
+    // ── Mapeo canónico de encabezados SAPD → campo de nómina ─────────────────
+    private const HEADER_MAP = [
+        'n_personal'                  => 'numero_personal',
+        'numero_personal'             => 'numero_personal',
+        'cedula_de_identidad'         => 'rut',
+        'rut'                         => 'rut',
+        'nombre_del_trabajador'       => 'nombre',
+        'nombre'                      => 'nombre',
+        'adscripcion_academica'       => 'adscripcion_academica',
+        'unidad_superior'             => 'unidad_superior',
+        'unidad'                      => 'unidad',
+        'nombre_de_la_posicion'       => 'nombre_posicion',
+        'nombre_posicion'             => 'nombre_posicion',
+        'tipo_de_trabajador'          => 'tipo_trabajador',
+        'tipo_trabajador'             => 'tipo_trabajador',
+        'fecha_de_inicio_de_contrato' => 'fecha_inicio_contrato',
+        'fecha_inicio_contrato'       => 'fecha_inicio_contrato',
+        'horas_de_contrato'           => 'horas_contrato',
+        'horas_contrato'              => 'horas_contrato',
+    ];
+
+    private function normalizeHeader(string $h): string
+    {
+        $h = mb_strtolower(trim($h));
+        $h = strtr($h, [
+            'á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ü'=>'u','ñ'=>'n',
+            'Á'=>'a','É'=>'e','Í'=>'i','Ó'=>'o','Ú'=>'u','Ü'=>'u','Ñ'=>'n',
+        ]);
+        $h = preg_replace('/[°\.\s\/]+/', '_', $h);
+        $h = preg_replace('/_+/', '_', $h);
+        return trim($h, '_');
+    }
+
+    /**
+     * Analiza encabezados y devuelve:
+     *   'campos'    → campo_nomina => índice columna (auto-detectado)
+     *   'historial' → año => ['calificacion'=>idx, 'concepto'=>idx, ...]
+     *   'sin_mapear' → [índice => encabezado original]
+     */
+    private function detectarMapeo(array $headers): array
+    {
+        $campos    = [];
+        $historial = [];
+        $sinMapear = [];
+        $maxAnioCat = null;
+
+        foreach ($headers as $idx => $raw) {
+            $norm = $this->normalizeHeader($raw);
+
+            if (isset(self::HEADER_MAP[$norm])) {
+                $campo = self::HEADER_MAP[$norm];
+                if (!isset($campos[$campo])) {
+                    $campos[$campo] = $idx;
+                }
+                continue;
+            }
+
+            if (preg_match('/^categoria_(\d{4})$/', $norm, $m)) {
+                $anio = (int) $m[1];
+                $historial[$anio]['categoria'] = $idx;
+                if ($maxAnioCat === null || $anio > $maxAnioCat) {
+                    $maxAnioCat = $anio;
+                    $campos['categoria'] = $idx;
+                }
+                continue;
+            }
+            if (preg_match('/^fecha_categoria_(\d{4})$/', $norm, $m)) {
+                $anio = (int) $m[1];
+                $historial[$anio]['fecha_categorizacion'] = $idx;
+                if ($anio === $maxAnioCat) {
+                    $campos['fecha_categorizacion'] = $idx;
+                }
+                continue;
+            }
+            if (preg_match('/^calificacion_(\d{4})$/', $norm, $m)) {
+                $historial[(int) $m[1]]['calificacion'] = $idx;
+                continue;
+            }
+            if (preg_match('/^concepto(?:_resultado)?_(\d{4})$/', $norm, $m)) {
+                $historial[(int) $m[1]]['concepto'] = $idx;
+                continue;
+            }
+            if (preg_match('/^observacion_calificacion_(\d{4})$/', $norm, $m)) {
+                $historial[(int) $m[1]]['observacion'] = $idx;
+                continue;
+            }
+            if (preg_match('/^resumen_(?:evaluacion|calificacion)_(\d{4})$/', $norm, $m)) {
+                $historial[(int) $m[1]]['resumen'] = $idx;
+                continue;
+            }
+            if (preg_match('/^proceso_(?:de_)?calificacion_(\d{4})$/', $norm, $m)) {
+                $historial[(int) $m[1]]['proceso'] = $idx;
+                continue;
+            }
+
+            if ($raw !== '') {
+                $sinMapear[$idx] = $raw;
+            }
+        }
+
+        return compact('campos', 'historial', 'sinMapear');
+    }
+
+    // ── Vista principal de nómina ─────────────────────────────────────────────
+
     public function create(Periodo $periodo): Response
     {
         $facultades = Facultad::orderBy('nombre')->get(['id', 'nombre', 'codigo']);
@@ -30,7 +138,12 @@ class NominaController extends Controller
             ->get(['id', 'name', 'rut', 'facultad_id']);
 
         $nominasEnPeriodo = Nomina::where('periodo_id', $periodo->id)
-            ->get(['id', 'user_id', 'estado', 'con_licencia', 'observacion_licencia', 'updated_at']);
+            ->get([
+                'id', 'user_id', 'estado', 'con_licencia', 'observacion_licencia', 'updated_at',
+                'numero_personal', 'rut', 'nombre', 'unidad_superior', 'unidad',
+                'nombre_posicion', 'tipo_trabajador', 'fecha_inicio_contrato',
+                'horas_contrato', 'categoria', 'fecha_categorizacion',
+            ]);
 
         return Inertia::render('Nomina/Create', [
             'periodo'          => $periodo->only(['id', 'anio', 'nombre', 'estado']),
@@ -39,6 +152,8 @@ class NominaController extends Controller
             'nominasEnPeriodo' => $nominasEnPeriodo,
         ]);
     }
+
+    // ── Agregar académicos seleccionando manualmente ──────────────────────────
 
     public function store(StoreNominaRequest $request, Periodo $periodo)
     {
@@ -57,14 +172,13 @@ class NominaController extends Controller
 
         $now = now();
         DB::table('nominas')->insert(array_map(fn ($uid) => [
-            'id'                   => (string) Str::uuid(),
-            'periodo_id'           => $periodo->id,
-            'user_id'              => $uid,
-            'estado'               => 'pendiente',
-            'con_licencia'         => false,
-            'observacion_licencia' => null,
-            'created_at'           => $now,
-            'updated_at'           => $now,
+            'id'           => (string) Str::uuid(),
+            'periodo_id'   => $periodo->id,
+            'user_id'      => $uid,
+            'estado'       => 'pendiente',
+            'con_licencia' => false,
+            'created_at'   => $now,
+            'updated_at'   => $now,
         ], $nuevos));
 
         $agregados = count($nuevos);
@@ -79,7 +193,7 @@ class NominaController extends Controller
             ->with('success', $msg);
     }
 
-    // ── Excel preview: lee encabezados + primeras filas ───────────────────────
+    // ── Excel preview: encabezados + auto-mapeo ──────────────────────────────
 
     public function previewExcel(Request $request, Periodo $periodo)
     {
@@ -90,7 +204,7 @@ class NominaController extends Controller
             'archivo.max'   => 'El archivo no puede superar los 5 MB.',
         ]);
 
-        $path = $request->file('archivo')->store('tmp_nominas');
+        $path     = $request->file('archivo')->store('tmp_nominas');
         $fullPath = storage_path('app/' . $path);
 
         try {
@@ -103,7 +217,6 @@ class NominaController extends Controller
                 foreach ($row->getCellIterator() as $cell) {
                     $cells[] = (string) $cell->getValue();
                 }
-                // Trim trailing empty cells
                 while (count($cells) > 0 && $cells[array_key_last($cells)] === '') {
                     array_pop($cells);
                 }
@@ -121,7 +234,8 @@ class NominaController extends Controller
             return back()->withErrors(['archivo' => 'El archivo está vacío.']);
         }
 
-        // Guarda la ruta en sesión para el segundo paso
+        $mapeoDetectado = $this->detectarMapeo($rows[0]);
+
         session(['nomina_excel_path' => $path, 'nomina_excel_periodo' => $periodo->id]);
 
         return back()->with([
@@ -129,23 +243,23 @@ class NominaController extends Controller
                 'columnas'     => $rows[0],
                 'preview_rows' => array_slice($rows, 1, 4),
                 'path'         => $path,
+                'auto_mapeo'   => $mapeoDetectado['campos'],
+                'sin_mapear'   => $mapeoDetectado['sinMapear'],
             ],
         ]);
     }
 
-    // ── Importación: aplica el mapeo del usuario ──────────────────────────────
+    // ── Importación con mapeo + historiales ──────────────────────────────────
 
     public function importarExcel(Request $request, Periodo $periodo)
     {
         $data = $request->validate([
-            'path'       => ['required', 'string'],
-            'col_rut'    => ['required', 'integer', 'min:0'],
-            'col_nombre' => ['required', 'integer', 'min:0'],
-            'col_facultad'   => ['nullable', 'integer', 'min:0'],
-            'col_categoria'  => ['nullable', 'integer', 'min:0'],
-            'col_horas_isem' => ['nullable', 'integer', 'min:0'],
-            'col_horas_iisem'=> ['nullable', 'integer', 'min:0'],
-            'tiene_encabezado' => ['boolean'],
+            'path'                => ['required', 'string'],
+            'tiene_encabezado'    => ['boolean'],
+            'mapeo'               => ['required', 'array'],
+            'mapeo.*'             => ['nullable', 'integer', 'min:0'],
+            'datos_adicionales'   => ['nullable', 'array'],
+            'datos_adicionales.*' => ['nullable', 'integer', 'min:0'],
         ]);
 
         $fullPath = storage_path('app/' . $data['path']);
@@ -169,23 +283,22 @@ class NominaController extends Controller
             return back()->withErrors(['path' => 'Error al leer el archivo: ' . $e->getMessage()]);
         }
 
+        $headers        = $data['tiene_encabezado'] ? ($allRows[0] ?? []) : [];
+        $mapeoHistorial = $headers ? $this->detectarMapeo($headers)['historial'] : [];
+
         if ($data['tiene_encabezado']) {
             array_shift($allRows);
         }
 
-        $facultades = Facultad::all()->keyBy(fn ($f) => mb_strtolower(trim($f->nombre)))
-            ->merge(Facultad::all()->keyBy(fn ($f) => mb_strtolower(trim($f->codigo ?? ''))));
-
-        $categoriasValidas = ['auxiliar', 'adjunto', 'titular', 'jerarquizado'];
-
+        $mapeo           = $data['mapeo'];
+        $colsAdicionales = $data['datos_adicionales'] ?? [];
         $creados = $omitidos = $errores = 0;
         $detalleErrores = [];
 
         foreach ($allRows as $i => $cells) {
-            $fila = $i + ($data['tiene_encabezado'] ? 2 : 1);
-
-            $rut    = trim($cells[$data['col_rut']]    ?? '');
-            $nombre = trim($cells[$data['col_nombre']] ?? '');
+            $fila   = $i + ($data['tiene_encabezado'] ? 2 : 1);
+            $rut    = trim($cells[$mapeo['rut']    ?? -1] ?? '');
+            $nombre = trim($cells[$mapeo['nombre'] ?? -1] ?? '');
 
             if (!$rut || !$nombre) {
                 $errores++;
@@ -193,24 +306,44 @@ class NominaController extends Controller
                 continue;
             }
 
-            // Facultad
-            $facultad = null;
-            if (isset($data['col_facultad'])) {
-                $val = mb_strtolower(trim($cells[$data['col_facultad']] ?? ''));
-                $facultad = $facultades->get($val);
+            // Campos SAPD de texto directo
+            $camposNomina = ['rut' => $rut, 'nombre' => $nombre];
+            foreach ([
+                'numero_personal', 'adscripcion_academica', 'unidad_superior', 'unidad',
+                'nombre_posicion', 'tipo_trabajador', 'categoria',
+            ] as $campo) {
+                if (isset($mapeo[$campo]) && $mapeo[$campo] !== null) {
+                    $val = trim($cells[$mapeo[$campo]] ?? '');
+                    $camposNomina[$campo] = $val !== '' ? $val : null;
+                }
             }
 
-            // Categoría
-            $categoria = null;
-            if (isset($data['col_categoria'])) {
-                $cat = mb_strtolower(trim($cells[$data['col_categoria']] ?? ''));
-                $categoria = in_array($cat, $categoriasValidas) ? $cat : null;
+            // Fechas
+            foreach (['fecha_inicio_contrato', 'fecha_categorizacion'] as $campo) {
+                if (isset($mapeo[$campo]) && $mapeo[$campo] !== null) {
+                    $val = trim($cells[$mapeo[$campo]] ?? '');
+                    $camposNomina[$campo] = $val !== '' ? $this->parseFecha($val) : null;
+                }
             }
 
-            $horasIsem  = isset($data['col_horas_isem'])  ? (int) ($cells[$data['col_horas_isem']]  ?? 0) : null;
-            $horasIIsem = isset($data['col_horas_iisem']) ? (int) ($cells[$data['col_horas_iisem']] ?? 0) : null;
+            // Horas numéricas
+            if (isset($mapeo['horas_contrato']) && $mapeo['horas_contrato'] !== null) {
+                $val = trim($cells[$mapeo['horas_contrato']] ?? '');
+                $camposNomina['horas_contrato'] = is_numeric($val) ? (int) $val : null;
+            }
 
-            // Crear o actualizar usuario
+            // Columnas sin mapear → datos_adicionales
+            $adicionales = [];
+            foreach ($colsAdicionales as $label => $colIdx) {
+                if ($colIdx !== null && isset($cells[$colIdx])) {
+                    $adicionales[$label] = $cells[$colIdx];
+                }
+            }
+            if ($adicionales) {
+                $camposNomina['datos_adicionales'] = $adicionales;
+            }
+
+            // Crear o enlazar usuario
             $user = User::where('rut', $rut)->first();
 
             if (!$user) {
@@ -220,54 +353,40 @@ class NominaController extends Controller
                     : $emailBase;
 
                 $user = User::create([
-                    'name'                 => $nombre,
-                    'rut'                  => $rut,
-                    'email'                => $email,
-                    'password'             => Hash::make(Str::random(16)),
-                    'role'                 => 'academico',
-                    'facultad_id'          => $facultad?->id,
-                    'categoria_academica'  => $categoria,
-                    'horas_contrato_isem'  => $horasIsem,
-                    'horas_contrato_iisem' => $horasIIsem,
+                    'name'     => $nombre,
+                    'rut'      => $rut,
+                    'email'    => $email,
+                    'password' => Hash::make(Str::random(16)),
+                    'role'     => 'academico',
                 ]);
-            } else {
-                $updates = array_filter([
-                    'facultad_id'          => $facultad?->id,
-                    'categoria_academica'  => $categoria,
-                    'horas_contrato_isem'  => $horasIsem,
-                    'horas_contrato_iisem' => $horasIIsem,
-                ], fn ($v) => $v !== null);
-
-                if ($updates) {
-                    $user->update($updates);
-                }
             }
 
-            // Agregar a nómina si no está
-            $yaEsta = Nomina::where('periodo_id', $periodo->id)
+            // Crear o actualizar nómina
+            $nomina = Nomina::where('periodo_id', $periodo->id)
                 ->where('user_id', $user->id)
-                ->exists();
+                ->first();
 
-            if ($yaEsta) {
+            if ($nomina) {
+                $nomina->update($camposNomina);
                 $omitidos++;
-                continue;
+            } else {
+                $nomina = Nomina::create(array_merge($camposNomina, [
+                    'periodo_id'   => $periodo->id,
+                    'user_id'      => $user->id,
+                    'estado'       => 'pendiente',
+                    'con_licencia' => false,
+                ]));
+                $creados++;
             }
 
-            Nomina::create([
-                'periodo_id'   => $periodo->id,
-                'user_id'      => $user->id,
-                'estado'       => 'pendiente',
-                'con_licencia' => false,
-            ]);
-
-            $creados++;
+            $this->poblarHistoriales($nomina, $cells, $mapeoHistorial);
         }
 
         @unlink($fullPath);
 
         $msg = "{$creados} académico(s) importado(s).";
-        if ($omitidos)      { $msg .= " {$omitidos} ya estaban en la nómina."; }
-        if ($errores)       { $msg .= " {$errores} fila(s) con errores omitidas."; }
+        if ($omitidos) { $msg .= " {$omitidos} ya estaban en la nómina (datos actualizados)."; }
+        if ($errores)  { $msg .= " {$errores} fila(s) con errores omitidas."; }
 
         return redirect()
             ->route('analista.periodos.nominas.create', $periodo->id)
@@ -275,18 +394,75 @@ class NominaController extends Controller
             ->with('import_errores', $detalleErrores);
     }
 
+    private function poblarHistoriales(Nomina $nomina, array $cells, array $mapeoHistorial): void
+    {
+        foreach ($mapeoHistorial as $anio => $cols) {
+            if (isset($cols['calificacion']) || isset($cols['concepto'])) {
+                $nota     = isset($cols['calificacion']) ? trim($cells[$cols['calificacion']] ?? '') : null;
+                $concepto = isset($cols['concepto'])     ? trim($cells[$cols['concepto']]     ?? '') : null;
+                $obs      = isset($cols['observacion'])  ? trim($cells[$cols['observacion']]  ?? '') : null;
+                $resumen  = isset($cols['resumen'])      ? trim($cells[$cols['resumen']]      ?? '') : null;
+                $proceso  = isset($cols['proceso'])      ? trim($cells[$cols['proceso']]      ?? '') : null;
+
+                HistorialCalificacion::updateOrCreate(
+                    ['nomina_id' => $nomina->id, 'anio' => $anio],
+                    [
+                        'nota'        => is_numeric($nota) ? (float) $nota : null,
+                        'concepto'    => $concepto ?: null,
+                        'observacion' => $obs      ?: null,
+                        'resumen'     => $resumen  ?: null,
+                        'proceso'     => $proceso  ?: null,
+                    ]
+                );
+            }
+
+            if (isset($cols['categoria'])) {
+                $cat   = trim($cells[$cols['categoria']] ?? '');
+                $fecha = isset($cols['fecha_categorizacion'])
+                    ? $this->parseFecha(trim($cells[$cols['fecha_categorizacion']] ?? ''))
+                    : null;
+
+                if ($cat) {
+                    HistorialCategoria::updateOrCreate(
+                        ['nomina_id' => $nomina->id, 'anio' => $anio],
+                        ['categoria' => $cat, 'fecha_categorizacion' => $fecha]
+                    );
+                }
+            }
+        }
+    }
+
+    private function parseFecha(string $val): ?string
+    {
+        if (!$val) {
+            return null;
+        }
+        foreach (['Y-m-d', 'd/m/Y', 'd-m-Y', 'Y/m/d'] as $fmt) {
+            $d = \DateTime::createFromFormat($fmt, $val);
+            if ($d && $d->format($fmt) === $val) {
+                return $d->format('Y-m-d');
+            }
+        }
+        try {
+            return Carbon::parse($val)->format('Y-m-d');
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     // ── Agregar académico individual ──────────────────────────────────────────
 
     public function agregarIndividual(Request $request, Periodo $periodo)
     {
         $data = $request->validate([
-            'rut'         => ['required', 'string', 'max:20'],
-            'nombre'      => ['required', 'string', 'max:200'],
-            'facultad_id' => ['required', 'uuid', 'exists:facultades,id'],
-            'categoria'   => ['required', 'in:auxiliar,adjunto,titular,jerarquizado'],
-        ], [
-            'facultad_id.required' => 'La facultad es obligatoria.',
-            'categoria.in'         => 'Categoría no válida.',
+            'rut'             => ['required', 'string', 'max:20'],
+            'nombre'          => ['required', 'string', 'max:200'],
+            'facultad_id'     => ['nullable', 'uuid', 'exists:facultades,id'],
+            'categoria'       => ['nullable', 'in:auxiliar,adjunto,titular,jerarquizado'],
+            'tipo_trabajador' => ['nullable', 'string', 'max:50'],
+            'unidad_superior' => ['nullable', 'string', 'max:150'],
+            'unidad'          => ['nullable', 'string', 'max:150'],
+            'horas_contrato'  => ['nullable', 'integer', 'min:0'],
         ]);
 
         $user = User::where('rut', $data['rut'])->first();
@@ -298,13 +474,12 @@ class NominaController extends Controller
                 : $emailBase;
 
             $user = User::create([
-                'name'                => $data['nombre'],
-                'rut'                 => $data['rut'],
-                'email'               => $email,
-                'password'            => Hash::make(Str::random(16)),
-                'role'                => 'academico',
-                'facultad_id'         => $data['facultad_id'],
-                'categoria_academica' => $data['categoria'],
+                'name'        => $data['nombre'],
+                'rut'         => $data['rut'],
+                'email'       => $email,
+                'password'    => Hash::make(Str::random(16)),
+                'role'        => 'academico',
+                'facultad_id' => $data['facultad_id'] ?? null,
             ]);
         }
 
@@ -317,15 +492,65 @@ class NominaController extends Controller
         }
 
         Nomina::create([
-            'periodo_id'   => $periodo->id,
-            'user_id'      => $user->id,
-            'estado'       => 'pendiente',
-            'con_licencia' => false,
+            'periodo_id'      => $periodo->id,
+            'user_id'         => $user->id,
+            'estado'          => 'pendiente',
+            'con_licencia'    => false,
+            'rut'             => $data['rut'],
+            'nombre'          => $data['nombre'],
+            'categoria'       => $data['categoria']       ?? null,
+            'tipo_trabajador' => $data['tipo_trabajador'] ?? null,
+            'unidad_superior' => $data['unidad_superior'] ?? null,
+            'unidad'          => $data['unidad']          ?? null,
+            'horas_contrato'  => $data['horas_contrato']  ?? null,
         ]);
 
         return redirect()
             ->route('analista.periodos.nominas.create', $periodo->id)
             ->with('success', "{$user->name} agregado a la nómina.");
+    }
+
+    // ── Detalle de un académico en la nómina ──────────────────────────────────
+
+    public function detalle(Periodo $periodo, Nomina $nomina): Response
+    {
+        $nomina->load(['academico', 'historialCalificaciones', 'historialCategorias']);
+
+        return Inertia::render('Nomina/Detalle', [
+            'periodo' => $periodo->only(['id', 'anio', 'nombre']),
+            'nomina'  => [
+                'id'                    => $nomina->id,
+                'numero_personal'       => $nomina->numero_personal,
+                'rut'                   => $nomina->rut ?? $nomina->academico?->rut,
+                'nombre'                => $nomina->nombre ?? $nomina->academico?->name,
+                'adscripcion_academica' => $nomina->adscripcion_academica,
+                'unidad_superior'       => $nomina->unidad_superior,
+                'unidad'                => $nomina->unidad,
+                'nombre_posicion'       => $nomina->nombre_posicion,
+                'tipo_trabajador'       => $nomina->tipo_trabajador,
+                'fecha_inicio_contrato' => $nomina->fecha_inicio_contrato?->format('d/m/Y'),
+                'horas_contrato'        => $nomina->horas_contrato,
+                'categoria'             => $nomina->categoria,
+                'fecha_categorizacion'  => $nomina->fecha_categorizacion?->format('d/m/Y'),
+                'estado'                => $nomina->estado,
+                'nota_vigente'          => $nomina->notaAnterior(),
+                'nota_vigente_activa'   => $nomina->notaVigente(),
+                'vencimiento_nota'      => $nomina->fechaVencimientoNota()?->format('d/m/Y'),
+            ],
+            'historial_calificaciones' => $nomina->historialCalificaciones->map(fn ($h) => [
+                'anio'        => $h->anio,
+                'nota'        => $h->nota,
+                'concepto'    => $h->concepto,
+                'observacion' => $h->observacion,
+                'resumen'     => $h->resumen,
+                'proceso'     => $h->proceso,
+            ]),
+            'historial_categorias' => $nomina->historialCategorias->map(fn ($h) => [
+                'anio'                 => $h->anio,
+                'categoria'            => $h->categoria,
+                'fecha_categorizacion' => $h->fecha_categorizacion?->format('d/m/Y'),
+            ]),
+        ]);
     }
 
     // ── Exportar nómina a Excel ───────────────────────────────────────────────
@@ -344,6 +569,13 @@ class NominaController extends Controller
             new NominaExport($periodo, $facultadId ?: null),
             $filename
         );
+    }
+
+    // ── Descargar plantilla UCM vacía ─────────────────────────────────────────
+
+    public function plantilla()
+    {
+        return Excel::download(new NominaExport(null, null, true), 'plantilla_nomina_ucm.xlsx');
     }
 
     // ── Caso especial (licencia) ──────────────────────────────────────────────

@@ -16,17 +16,26 @@ class Nomina extends Model
         'periodo_id', 'user_id', 'estado',
         'con_licencia', 'observacion_licencia', 'plazo_licencia', 'documento_licencia',
         'observacion_secretario',
+        // Campos SAPD UCM
+        'numero_personal', 'rut', 'nombre', 'adscripcion_academica',
+        'unidad_superior', 'unidad', 'nombre_posicion', 'tipo_trabajador',
+        'fecha_inicio_contrato', 'horas_contrato', 'categoria', 'fecha_categorizacion',
+        'datos_adicionales',
     ];
 
     protected function casts(): array
     {
         return [
-            'con_licencia'   => 'boolean',
-            'plazo_licencia' => 'date',
+            'con_licencia'          => 'boolean',
+            'plazo_licencia'        => 'date',
+            'fecha_inicio_contrato' => 'date',
+            'fecha_categorizacion'  => 'date',
+            'datos_adicionales'     => 'array',
         ];
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
+
     public function puedeCargarEvidencias(): bool
     {
         return in_array($this->estado, ['pendiente', 'en_carga']);
@@ -37,7 +46,74 @@ class Nomina extends Model
         return $this->estado === 'en_evaluacion';
     }
 
+    /**
+     * Devuelve la categoría efectiva: primero del campo SAPD en nómina,
+     * luego del perfil del usuario (compatibilidad legada).
+     */
+    public function categoriaEfectiva(): string
+    {
+        return $this->categoria
+            ?? $this->academico?->categoria_academica
+            ?? 'adjunto';
+    }
+
+    /**
+     * Devuelve la nota vigente más reciente desde historial_calificaciones.
+     * Si no hay historial, cae al campo legado en el usuario.
+     */
+    public function notaAnterior(): ?float
+    {
+        $h = $this->historialCalificaciones()
+            ->whereNotNull('nota')
+            ->orderByDesc('anio')
+            ->first();
+
+        return $h ? (float) $h->nota : ($this->academico?->nota_anterior ? (float) $this->academico->nota_anterior : null);
+    }
+
+    public function conceptoAnterior(): ?string
+    {
+        $h = $this->historialCalificaciones()
+            ->whereNotNull('nota')
+            ->orderByDesc('anio')
+            ->first();
+
+        return $h?->concepto ?? $this->academico?->concepto_anterior;
+    }
+
+    /**
+     * Calcula si la nota está vigente según la categoría y fecha de categorización.
+     * - Auxiliar: vigente 1 año desde fecha_categorizacion
+     * - Adjunto / Titular: vigente 2 años
+     */
+    public function notaVigente(): bool
+    {
+        if (!$this->fecha_categorizacion || !$this->categoria) {
+            return false;
+        }
+        $meses = match (strtolower($this->categoria)) {
+            'auxiliar' => 12,
+            default    => 24,
+        };
+
+        return now()->diffInMonths($this->fecha_categorizacion, false) > -$meses;
+    }
+
+    public function fechaVencimientoNota(): ?\Carbon\Carbon
+    {
+        if (!$this->fecha_categorizacion || !$this->categoria) {
+            return null;
+        }
+        $meses = match (strtolower($this->categoria)) {
+            'auxiliar' => 12,
+            default    => 24,
+        };
+
+        return $this->fecha_categorizacion->copy()->addMonths($meses);
+    }
+
     // ── Relaciones ───────────────────────────────────────────────────────
+
     public function periodo(): BelongsTo
     {
         return $this->belongsTo(Periodo::class);
@@ -66,6 +142,16 @@ class Nomina extends Model
     public function evaluaciones(): HasMany
     {
         return $this->hasMany(Evaluacion::class);
+    }
+
+    public function historialCalificaciones(): HasMany
+    {
+        return $this->hasMany(HistorialCalificacion::class)->orderByDesc('anio');
+    }
+
+    public function historialCategorias(): HasMany
+    {
+        return $this->hasMany(HistorialCategoria::class)->orderByDesc('anio');
     }
 
     public function calificacionFinal(): HasOne
@@ -155,6 +241,7 @@ class Nomina extends Model
     }
 
     // ── Scopes ───────────────────────────────────────────────────────────
+
     public function scopeDeEstado($query, string $estado)
     {
         return $query->where('estado', $estado);
