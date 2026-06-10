@@ -24,7 +24,7 @@ class JefaturaController extends Controller
 
         if ($periodo && $user->facultad_id) {
             $etapa = Cronograma::where('periodo_id', $periodo->id)
-                ->where('etapa', 'evaluacion_jefatura')
+                ->where('etapa', 'consejo_facultad')
                 ->first();
 
             if ($etapa) {

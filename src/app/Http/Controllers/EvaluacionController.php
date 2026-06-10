@@ -4,13 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Models\CalificacionFinal;
 use App\Models\CategoriaApa;
+use App\Models\CompromisoApa;
 use App\Models\Cronograma;
 use App\Models\Evaluacion;
 use App\Models\Evidencia;
 use App\Models\Nomina;
 use App\Models\Notificacion;
 use App\Models\Periodo;
-use App\Models\PlazoFacultad;
 use App\Services\CalificacionCadService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -35,12 +35,7 @@ class EvaluacionController extends Controller
                 ->where('etapa', 'carga_evidencias')
                 ->first();
 
-            $plazo = PlazoFacultad::where('periodo_id', $periodo->id)
-                ->where('facultad_id', $user->facultad_id)
-                ->first();
-
-            $recepcionCerrada     = $plazo && $plazo->estaCerradoFormalmente();
-            $evaluacionHabilitada = $recepcionCerrada || ($etapaCarga && $etapaCarga->haTerminado());
+            $evaluacionHabilitada = $etapaCarga && $etapaCarga->haTerminado();
             $fechaAperturaEval    = $etapaCarga?->fecha_fin->format('d/m/Y');
 
             if ($evaluacionHabilitada) {
@@ -107,18 +102,12 @@ class EvaluacionController extends Controller
             ->where('etapa', 'carga_evidencias')
             ->first();
 
-        $plazo = PlazoFacultad::where('periodo_id', $nomina->periodo_id)
-            ->where('facultad_id', $user->facultad_id)
-            ->first();
-
-        $recepcionCerrada = $plazo && $plazo->estaCerradoFormalmente();
-
-        if (!$recepcionCerrada && $etapaCarga && !$etapaCarga->haTerminado()) {
+        if ($etapaCarga && !$etapaCarga->haTerminado()) {
             return redirect()->route('cca.expedientes')
                 ->with('error', 'La evaluación se habilita cuando cierre el período de entrega de evidencias ('.$etapaCarga->fecha_fin->format('d/m/Y').').');
         }
 
-        $nomina->load(['academico.facultad', 'academico.departamento']);
+        $nomina->load(['academico.facultad', 'academico.departamento', 'compromisoApa']);
 
         $apelacion   = $nomina->apelacion;
         $esApelacion = $apelacion && $apelacion->estado === 'resuelta'
@@ -146,10 +135,11 @@ class EvaluacionController extends Controller
             ->where('es_apelacion', $esApelacion)
             ->first();
 
-        $academico = $nomina->academico;
-        // Categoría: primero del campo SAPD de la nómina, luego del perfil del usuario
-        $categoria = $nomina->categoriaEfectiva();
-        $pesos     = CalificacionCadService::pesosParaCategoria($categoria);
+        $academico  = $nomina->academico;
+        $categoria  = $nomina->categoriaEfectiva();
+        $compromiso = $nomina->compromisoApa;
+        $pesos      = CalificacionCadService::pesosDesdeCompromiso($compromiso, $categoria);
+        $sinCompromiso = !$compromiso || !$compromiso->estaConfirmado();
 
         $categoriasConPeso = $categorias->map(fn ($c) => [
             'id'     => $c->id,
@@ -164,7 +154,7 @@ class EvaluacionController extends Controller
             ->get()
             ->map(fn ($e) => [
                 'evaluador'     => $e->evaluador->name,
-                'nota_final'    => $e->notaFinalCad($categoria),
+                'nota_final'    => $e->notaFinalCad($categoria, $compromiso),
             ]);
 
         $calificacionFinal = $esApelacion
@@ -182,15 +172,14 @@ class EvaluacionController extends Controller
                     'email'                 => $academico->email,
                     'facultad'              => $academico->facultad?->nombre,
                     'departamento'          => $academico->departamento?->nombre,
-                    'categoria_academica'   => CalificacionCadService::labelCategoria($categoria),
+                    'categoria_academica'   => CalificacionCadService::labelCategoria($nomina->categoriaEfectiva()),
                     'categoria_key'         => $categoria,
                     'linea_desarrollo'      => CalificacionCadService::labelLinea($academico->linea_desarrollo),
                     'fecha_jerarquizacion'  => $academico->fecha_jerarquizacion?->format('d/m/Y'),
-                    'horas_contrato'        => $nomina->horas_contrato ?? $academico->horas_contrato_isem,
                     'horas_contrato_isem'   => $academico->horas_contrato_isem,
                     'horas_contrato_iisem'  => $academico->horas_contrato_iisem,
                     'nota_anterior'         => $nomina->notaAnterior(),
-                    'concepto_anterior'     => $nomina->conceptoAnterior(),
+                    'concepto_anterior'     => $academico->concepto_anterior,
                 ],
             ],
             'categorias'             => $categoriasConPeso,
@@ -202,8 +191,10 @@ class EvaluacionController extends Controller
                 'puntaje_vinculacion'   => (float) $miEvaluacion->puntaje_vinculacion,
                 'puntaje_gestion'       => (float) $miEvaluacion->puntaje_gestion,
                 'puntaje_formacion'     => (float) $miEvaluacion->puntaje_formacion,
+                'sin_calificacion'      => (bool) $miEvaluacion->sin_calificacion,
+                'motivo_sc'             => $miEvaluacion->motivo_sc,
                 'comentario'            => $miEvaluacion->comentario,
-                'nota_final'            => $miEvaluacion->notaFinalCad($categoria),
+                'nota_final'            => $miEvaluacion->notaFinalCad($categoria, $compromiso),
                 'fecha'                 => $miEvaluacion->updated_at->format('d/m/Y H:i'),
                 'evaluador'             => $user->name,
             ] : null,
@@ -216,6 +207,7 @@ class EvaluacionController extends Controller
                 'observacion'   => $calificacionFinal->observacion,
             ] : null,
             'esApelacion'            => $esApelacion,
+            'sinCompromisoApa'       => $sinCompromiso,
         ]);
     }
 
@@ -255,17 +247,35 @@ class EvaluacionController extends Controller
         }
 
         $data = $request->validate([
-            'puntaje_docencia'      => ['required', 'numeric', 'min:1', 'max:5'],
-            'puntaje_investigacion' => ['required', 'numeric', 'min:1', 'max:5'],
-            'puntaje_vinculacion'   => ['required', 'numeric', 'min:1', 'max:5'],
-            'puntaje_gestion'       => ['required', 'numeric', 'min:1', 'max:5'],
-            'puntaje_formacion'     => ['required', 'numeric', 'min:1', 'max:5'],
+            'sin_calificacion'      => ['sometimes', 'boolean'],
+            'motivo_sc'             => ['nullable', 'string', 'max:2000', 'required_if:sin_calificacion,true'],
+            'puntaje_docencia'      => ['nullable', 'numeric', 'min:1', 'max:5'],
+            'puntaje_investigacion' => ['nullable', 'numeric', 'min:1', 'max:5'],
+            'puntaje_vinculacion'   => ['nullable', 'numeric', 'min:1', 'max:5'],
+            'puntaje_gestion'       => ['nullable', 'numeric', 'min:1', 'max:5'],
+            'puntaje_formacion'     => ['nullable', 'numeric', 'min:1', 'max:5'],
             'comentario'            => ['nullable', 'string', 'max:2000'],
         ]);
 
+        $sinCalificacion = (bool) ($data['sin_calificacion'] ?? false);
+
+        if (!$sinCalificacion) {
+            foreach (['puntaje_docencia', 'puntaje_investigacion', 'puntaje_vinculacion', 'puntaje_gestion', 'puntaje_formacion'] as $campo) {
+                if (!isset($data[$campo])) {
+                    return back()->withErrors([$campo => 'La nota es obligatoria salvo marcar Sin calificación.']);
+                }
+            }
+        }
+
+        $categoria = $nomina->categoriaEfectiva();
+
         Evaluacion::updateOrCreate(
             ['nomina_id' => $nomina->id, 'evaluador_id' => $user->id, 'es_apelacion' => $esApelacion],
-            $data
+            array_merge($data, [
+                'sin_calificacion' => $sinCalificacion,
+                'motivo_sc'        => $sinCalificacion ? ($data['motivo_sc'] ?? null) : null,
+                'vigente_hasta'    => CalificacionCadService::vigenteHasta($categoria)->toDateString(),
+            ])
         );
 
         $evaluacion = Evaluacion::where('nomina_id', $nomina->id)
@@ -273,8 +283,9 @@ class EvaluacionController extends Controller
             ->where('es_apelacion', $esApelacion)
             ->first();
 
-        $categoria = $nomina->categoriaEfectiva();
-        $notaFinal = $evaluacion->notaFinalCad($categoria);
+        $categoria  = $nomina->categoriaEfectiva();
+        $compromiso = CompromisoApa::where('nomina_id', $nomina->id)->first();
+        $notaFinal  = $evaluacion->notaFinalCad($categoria, $compromiso);
         $concepto  = CalificacionCadService::labelConcepto(
             CalificacionCadService::conceptoDesdeNota($notaFinal)
         );
@@ -310,10 +321,10 @@ class EvaluacionController extends Controller
         }
 
         $esApelacion = $calificacion->es_apelacion;
-        $nomina->load(['academico.facultad', 'academico.departamento']);
-        $academico = $nomina->academico;
-        $categoria = $nomina->categoriaEfectiva();
-        $pesos     = CalificacionCadService::pesosParaCategoria($categoria);
+        $nomina->load(['academico.facultad', 'academico.departamento', 'compromisoApa']);
+        $academico  = $nomina->academico;
+        $categoria  = $nomina->categoriaEfectiva();
+        $pesos      = CalificacionCadService::pesosDesdeCompromiso($nomina->compromisoApa, $categoria);
         $categorias = CategoriaApa::orderBy('orden')->get();
 
         $evaluaciones = Evaluacion::with('evaluador')
@@ -321,9 +332,7 @@ class EvaluacionController extends Controller
             ->where('es_apelacion', $esApelacion)
             ->get();
 
-        $horasBase = $nomina->horas_contrato ?? $academico->horas_contrato_isem ?? 0;
-
-        $areas = $categorias->map(function ($cat) use ($pesos, $evaluaciones, $academico, $horasBase) {
+        $areas = $categorias->map(function ($cat) use ($pesos, $evaluaciones, $academico) {
             $slugReg     = CalificacionCadService::SLUG_A_REGLAMENTO[$cat->slug] ?? $cat->slug;
             $campo       = CalificacionCadService::CAMPOS[$slugReg] ?? null;
             $peso        = (float) ($pesos[$slugReg] ?? 0);
@@ -332,8 +341,8 @@ class EvaluacionController extends Controller
                 : 0.0;
             $concepto    = $nota > 0 ? CalificacionCadService::conceptoDesdeNota($nota) : null;
             $ponderacion = round(($peso * $nota) / 100, 2);
-            $horasIsem   = $peso > 0 ? round(($peso * $horasBase) / 100, 1) : 0;
-            $horasIisem  = $peso > 0 ? round(($peso * ($academico->horas_contrato_iisem ?? $horasBase)) / 100, 1) : 0;
+            $horasIsem   = $peso > 0 ? round(($peso * ($academico->horas_contrato_isem ?? 0)) / 100, 1) : 0;
+            $horasIisem  = $peso > 0 ? round(($peso * ($academico->horas_contrato_iisem ?? 0)) / 100, 1) : 0;
 
             return [
                 'nombre'      => $cat->nombre,
@@ -382,10 +391,11 @@ class EvaluacionController extends Controller
             'observacion' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $categoria = $nomina->categoriaEfectiva();
+        $categoria  = $nomina->categoriaEfectiva();
+        $compromiso = CompromisoApa::where('nomina_id', $nomina->id)->first();
 
         $notasCad = $evaluaciones->map(
-            fn ($e) => CalificacionCadService::calcularDesdeEvaluacion($e, $categoria)
+            fn ($e) => CalificacionCadService::calcularDesdeEvaluacion($e, $categoria, $compromiso)
         );
 
         $notaFinal  = round($notasCad->avg(), 2);

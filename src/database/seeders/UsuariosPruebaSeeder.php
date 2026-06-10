@@ -11,7 +11,8 @@ class UsuariosPruebaSeeder extends Seeder
 {
     public function run(): void
     {
-        $fci = Facultad::where('codigo', 'FCI')->first();
+        $fci  = Facultad::where('codigo', 'FCI')->first();
+        $fcaf = Facultad::where('codigo', 'FCAF')->first();
 
         $usuarios = [
             [
@@ -45,6 +46,12 @@ class UsuariosPruebaSeeder extends Seeder
                 'facultad_id' => $fci?->id,
             ],
             [
+                'email'       => 'vicerrectora@ucm.cl',
+                'name'        => 'Vicerrectora Académica',
+                'role'        => 'vicerrectora',
+                'facultad_id' => null,
+            ],
+            [
                 'email'       => 'academico@ucm.cl',
                 'name'        => 'Académico Prueba',
                 'role'        => 'academico',
@@ -57,6 +64,38 @@ class UsuariosPruebaSeeder extends Seeder
                 'horas_contrato_iisem'  => 18,
                 'nota_anterior'         => 4.2,
                 'concepto_anterior'     => 'Muy Bueno',
+            ],
+            [
+                'email'       => 'secretario.fcaf@ucm.cl',
+                'name'        => 'Secretario FCAF',
+                'role'        => 'secretario',
+                'facultad_id' => $fcaf?->id,
+            ],
+            [
+                'email'       => 'cca.fcaf@ucm.cl',
+                'name'        => 'Miembro CCA FCAF',
+                'role'        => 'miembro_cca',
+                'facultad_id' => $fcaf?->id,
+            ],
+            [
+                'email'       => 'jefe.fcaf@ucm.cl',
+                'name'        => 'Jefe Académico FCAF',
+                'role'        => 'jefe_academico',
+                'facultad_id' => $fcaf?->id,
+            ],
+            [
+                'email'       => 'academico.fcaf@ucm.cl',
+                'name'        => 'Académico FCAF Demo',
+                'role'        => 'academico',
+                'facultad_id' => $fcaf?->id,
+                'rut'         => '17.890.123-4',
+                'categoria_academica'   => 'titular',
+                'linea_desarrollo'      => 'investigador',
+                'fecha_jerarquizacion'  => '2012-09-01',
+                'horas_contrato_isem'   => 22,
+                'horas_contrato_iisem'  => 22,
+                'nota_anterior'         => 4.5,
+                'concepto_anterior'     => 'Excelente',
             ],
         ];
 

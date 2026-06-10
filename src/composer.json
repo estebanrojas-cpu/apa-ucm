@@ -10,7 +10,7 @@
         "inertiajs/inertia-laravel": "*",
         "laravel/framework": "^13.0",
         "laravel/tinker": "^3.0",
-        "maatwebsite/excel": "^3.1"
+        "maatwebsite/excel": "*"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

@@ -12,7 +12,7 @@ class Cronograma extends Model
 
     public const ETAPAS = [
         'carga_evidencias',
-        'evaluacion_secretario',
+        'validacion_secretario',
         'evaluacion_cca',
         'consejo_facultad',
         'apelaciones',
@@ -22,12 +22,18 @@ class Cronograma extends Model
 
     public const ETIQUETAS = [
         'carga_evidencias'       => 'Carga de Evidencias',
-        'evaluacion_secretario'  => 'Validación Secretario',
+        'validacion_secretario'  => 'Validación Secretario',
         'evaluacion_cca'         => 'Evaluación CCA',
         'consejo_facultad'       => 'Consejo de Facultad',
         'apelaciones'            => 'Apelaciones',
         'revision_vicerrectoria' => 'Revisión Vicerrectoría',
         'cierre'                 => 'Cierre',
+    ];
+
+    /** Etapas que inician en paralelo con el período */
+    public const ETAPAS_PARALELAS = [
+        'carga_evidencias',
+        'validacion_secretario',
     ];
 
     protected $fillable = [
@@ -42,10 +48,10 @@ class Cronograma extends Model
         ];
     }
 
-    // ── Helpers ──────────────────────────────────────────────────────────
     public function estaVigente(): bool
     {
         $hoy = now()->toDateString();
+
         return $this->fecha_inicio->toDateString() <= $hoy
             && $this->fecha_fin->toDateString() >= $hoy;
     }
@@ -61,14 +67,12 @@ class Cronograma extends Model
     }
 
     /**
-     * Calcula la fecha de inicio de una etapa según la lógica del proceso CAD.
-     *
-     * @param  array<string, string>  $finesPorEtapa  Mapa etapa => fecha_fin (Y-m-d)
+     * @param  array<string, string>  $finesPorEtapa
      */
     public static function calcularFechaInicio(string $etapa, string $periodoInicio, array $finesPorEtapa): string
     {
         return match ($etapa) {
-            'carga_evidencias', 'evaluacion_secretario' => $periodoInicio,
+            'carga_evidencias', 'validacion_secretario' => $periodoInicio,
             'evaluacion_cca'         => $finesPorEtapa['carga_evidencias'],
             'consejo_facultad'       => $finesPorEtapa['evaluacion_cca'],
             'apelaciones'            => $finesPorEtapa['consejo_facultad'],
@@ -98,18 +102,17 @@ class Cronograma extends Model
         return self::ETIQUETAS[$etapa] ?? $etapa;
     }
 
-    // ── Relaciones ───────────────────────────────────────────────────────
     public function periodo(): BelongsTo
     {
         return $this->belongsTo(Periodo::class);
     }
 
-    // ── Scopes ───────────────────────────────────────────────────────────
     public function scopeVigentes($query)
     {
         $hoy = now()->toDateString();
+
         return $query->where('fecha_inicio', '<=', $hoy)
-                     ->where('fecha_fin', '>=', $hoy);
+            ->where('fecha_fin', '>=', $hoy);
     }
 
     public function scopeDeEtapa($query, string $etapa)

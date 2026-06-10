@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\CompromisoApa;
 use App\Models\CategoriaApa;
 use App\Models\Cronograma;
 use App\Models\Evidencia;
@@ -22,10 +23,9 @@ use Illuminate\Support\Str;
  *
  * Crea (idempotente):
  *  - 1 período activo con cronograma completo (6 etapas secuenciales).
- *  - 1 plazo FCI vigente (no cerrado).
- *  - 5 académicos extra en la facultad FCI (sumados al `academico@ucm.cl` existente).
- *  - Nóminas para los 6 académicos: 4 pendientes, 1 con licencia, 1 en carga con
- *    2 evidencias PDF dummy (Docencia + Investigación) listas para mostrar.
+ *  - Plazos vigentes FCI y FCAF.
+ *  - FCI: 6 académicos (declaración APA, licencias, evidencias demo).
+ *  - FCAF: 2 académicos (segunda facultad operativa en demo).
  *
  * Diseñado para correrse después de `UsuariosPruebaSeeder` en entorno local.
  */
@@ -48,12 +48,14 @@ class DemoSeeder extends Seeder
 
         $periodo = $this->crearPeriodoActivo($analista);
         $this->crearCronograma($periodo);
-        $this->crearPlazoFCI($periodo, $fci, $secretario);
+        $this->crearPlazoFacultad($periodo, $fci, $secretario);
 
         $academicos = $this->crearAcademicosFCI($academico, $fci);
         $this->crearNominas($periodo, $academicos, $analista, $secretario);
         $this->crearEvidenciasDemo($periodo, $academico);
-        $this->prepararDemoCCA($periodo, $academicos);
+        $this->crearCompromisosDemo($periodo, $academicos);
+
+        $this->seedFacultadFCAF($periodo);
     }
 
     private function crearPeriodoActivo(User $analista): Periodo
@@ -77,37 +79,114 @@ class DemoSeeder extends Seeder
     {
         $inicio = Carbon::parse($periodo->fecha_inicio);
 
-        // Etapas secuenciales (cada una empieza el día siguiente a la anterior).
-        $etapas = [
-            ['etapa' => 'carga_evidencias',       'desde' => 0,   'hasta' => 30],
-            ['etapa' => 'evaluacion_secretario',  'desde' => 0,   'hasta' => 45],
-            ['etapa' => 'evaluacion_cca',         'desde' => 31,  'hasta' => 75],
-            ['etapa' => 'consejo_facultad',       'desde' => 76,  'hasta' => 95],
-            ['etapa' => 'apelaciones',            'desde' => 96,  'hasta' => 115],
-            ['etapa' => 'revision_vicerrectoria', 'desde' => 116, 'hasta' => 135],
-            ['etapa' => 'cierre',                 'desde' => 136, 'hasta' => 150],
+        $fines = [
+            ['etapa' => 'carga_evidencias',       'fecha_fin' => $inicio->copy()->addDays(30)->toDateString()],
+            ['etapa' => 'validacion_secretario',  'fecha_fin' => $inicio->copy()->addDays(60)->toDateString()],
+            ['etapa' => 'evaluacion_cca',         'fecha_fin' => $inicio->copy()->addDays(90)->toDateString()],
+            ['etapa' => 'consejo_facultad',       'fecha_fin' => $inicio->copy()->addDays(110)->toDateString()],
+            ['etapa' => 'apelaciones',            'fecha_fin' => $inicio->copy()->addDays(130)->toDateString()],
+            ['etapa' => 'revision_vicerrectoria', 'fecha_fin' => $inicio->copy()->addDays(140)->toDateString()],
+            ['etapa' => 'cierre',                 'fecha_fin' => $inicio->copy()->addDays(150)->toDateString()],
         ];
 
-        foreach ($etapas as $e) {
+        $preparado = Cronograma::prepararParaGuardar($inicio->toDateString(), $fines);
+
+        foreach ($preparado as $e) {
             Cronograma::firstOrCreate(
                 ['periodo_id' => $periodo->id, 'etapa' => $e['etapa']],
                 [
-                    'fecha_inicio' => $inicio->copy()->addDays($e['desde'])->toDateString(),
-                    'fecha_fin'    => $inicio->copy()->addDays($e['hasta'])->toDateString(),
+                    'fecha_inicio' => $e['fecha_inicio'],
+                    'fecha_fin'    => $e['fecha_fin'],
                 ]
             );
         }
     }
 
-    private function crearPlazoFCI(Periodo $periodo, Facultad $fci, User $secretario): void
+    private function crearPlazoFacultad(Periodo $periodo, Facultad $facultad, User $secretario): void
     {
         PlazoFacultad::firstOrCreate(
-            ['periodo_id' => $periodo->id, 'facultad_id' => $fci->id],
+            ['periodo_id' => $periodo->id, 'facultad_id' => $facultad->id],
             [
                 'fecha_limite' => Carbon::today()->addDays(10)->toDateString(),
                 'creado_por'   => $secretario->id,
             ]
         );
+    }
+
+    /** Segunda facultad demo: FCAF (Ciencias Agrarias y Forestales). */
+    private function seedFacultadFCAF(Periodo $periodo): void
+    {
+        $fcaf       = Facultad::where('codigo', 'FCAF')->first();
+        $secretario = User::where('email', 'secretario.fcaf@ucm.cl')->first();
+        $academico  = User::where('email', 'academico.fcaf@ucm.cl')->first();
+
+        if (!$fcaf || !$secretario || !$academico) {
+            $this->command?->warn('DemoSeeder: omitiendo FCAF (faltan facultad o usuarios base).');
+            return;
+        }
+
+        $this->crearPlazoFacultad($periodo, $fcaf, $secretario);
+
+        $paula = User::firstOrCreate(
+            ['email' => 'paula.morales@ucm.cl'],
+            [
+                'name'        => 'Paula Andrea Morales Vega',
+                'rut'         => '18.901.234-5',
+                'role'        => 'academico',
+                'facultad_id' => $fcaf->id,
+                'password'    => Hash::make('password'),
+            ]
+        );
+
+        $this->aplicarPerfil($paula, [
+            'categoria' => 'adjunto',
+            'linea'     => 'docente',
+            'nota'      => 4.1,
+            'concepto'  => 'Muy Bueno',
+        ]);
+
+        foreach ([$academico, $paula] as $i => $u) {
+            Nomina::firstOrCreate(
+                ['periodo_id' => $periodo->id, 'user_id' => $u->id],
+                [
+                    'facultad_id' => $fcaf->id,
+                    'estado'      => $i === 0 ? 'en_carga' : 'pendiente',
+                ]
+            );
+        }
+
+        $this->crearEvidenciasParaAcademico($periodo, $academico, [
+            [
+                'slug'        => 'docencia',
+                'nombre'      => 'programa-asignatura-agronomia.pdf',
+                'descripcion' => 'Programa y evaluaciones de Agronomía Sustentable (2025-1).',
+            ],
+            [
+                'slug'        => 'investigacion',
+                'nombre'      => 'informe-proyecto-fondef.pdf',
+                'descripcion' => 'Avance de proyecto FONDECYT en producción agrícola sustentable.',
+            ],
+        ]);
+
+        $nominaFcaf = Nomina::where('periodo_id', $periodo->id)
+            ->where('user_id', $academico->id)
+            ->first();
+
+        if ($nominaFcaf) {
+            CompromisoApa::updateOrCreate(
+                ['nomina_id' => $nominaFcaf->id],
+                [
+                    'periodo_id'         => $periodo->id,
+                    'pct_docencia'       => 45,
+                    'pct_investigacion'  => 35,
+                    'pct_extension'      => 10,
+                    'pct_administracion' => 5,
+                    'pct_otras'          => 5,
+                    'fuente'             => 'manual',
+                    'confirmado_en'      => now(),
+                ]
+            );
+        }
     }
 
     /**
@@ -216,13 +295,13 @@ class DemoSeeder extends Seeder
             }
 
             if ($i === 2) {
-                $motivo = 'Director informa licencia médica de 30 días — pendiente revisión CCDA.';
+                $motivo = 'Director informa licencia médica de 30 días.';
 
                 Solicitud::updateOrCreate(
                     [
                         'nomina_id' => $nomina->id,
                         'tipo'      => 'licencia_medica',
-                        'estado'    => 'pendiente_aprobacion',
+                        'estado'    => 'activa',
                     ],
                     [
                         'fecha_inicio' => Carbon::today()->toDateString(),
@@ -232,11 +311,33 @@ class DemoSeeder extends Seeder
                         'iniciada_por' => $secretario->id,
                     ]
                 );
+
+                $nomina->update([
+                    'con_licencia'         => true,
+                    'observacion_licencia' => $motivo,
+                ]);
             }
         }
     }
 
     private function crearEvidenciasDemo(Periodo $periodo, User $academico): void
+    {
+        $this->crearEvidenciasParaAcademico($periodo, $academico, [
+            [
+                'slug'        => 'docencia',
+                'nombre'      => 'planificacion-asignatura-2025.pdf',
+                'descripcion' => 'Planificación y syllabus de Programación II (semestre 2025-1).',
+            ],
+            [
+                'slug'        => 'investigacion',
+                'nombre'      => 'articulo-revista-ingenieria.pdf',
+                'descripcion' => 'Artículo aceptado en revista indexada Scopus (Q3).',
+            ],
+        ]);
+    }
+
+    /** @param  array<int, array{slug: string, nombre: string, descripcion: string}>  $archivos */
+    private function crearEvidenciasParaAcademico(Periodo $periodo, User $academico, array $archivos): void
     {
         $nomina = Nomina::where('periodo_id', $periodo->id)
             ->where('user_id', $academico->id)
@@ -246,14 +347,6 @@ class DemoSeeder extends Seeder
             return;
         }
 
-        $docencia      = CategoriaApa::where('slug', 'docencia')->first();
-        $investigacion = CategoriaApa::where('slug', 'investigacion')->first();
-
-        if (!$docencia || !$investigacion) {
-            return;
-        }
-
-        // Idempotencia: regenerar los archivos dummy si ya existían.
         $disk = Storage::disk('public');
         foreach ($nomina->evidencias as $ev) {
             $disk->delete($ev->ruta);
@@ -262,20 +355,12 @@ class DemoSeeder extends Seeder
 
         $directorio = "evidencias/{$nomina->id}";
 
-        $archivos = [
-            [
-                'categoria'   => $docencia,
-                'nombre'      => 'planificacion-asignatura-2025.pdf',
-                'descripcion' => 'Planificación y syllabus de Programación II (semestre 2025-1).',
-            ],
-            [
-                'categoria'   => $investigacion,
-                'nombre'      => 'articulo-revista-ingenieria.pdf',
-                'descripcion' => 'Artículo aceptado en revista indexada Scopus (Q3).',
-            ],
-        ];
-
         foreach ($archivos as $info) {
+            $categoria = CategoriaApa::where('slug', $info['slug'])->first();
+            if (!$categoria) {
+                continue;
+            }
+
             $contenido = $this->generarPdfDummy($info['nombre'], $info['descripcion']);
             $ruta      = "{$directorio}/" . Str::random(16) . '.pdf';
 
@@ -283,7 +368,7 @@ class DemoSeeder extends Seeder
 
             Evidencia::create([
                 'nomina_id'      => $nomina->id,
-                'categoria_id'   => $info['categoria']->id,
+                'categoria_id'   => $categoria->id,
                 'nombre_archivo' => $info['nombre'],
                 'ruta'           => $ruta,
                 'tamano'         => strlen($contenido),
@@ -295,27 +380,34 @@ class DemoSeeder extends Seeder
         }
     }
 
-    /** Habilita evaluación CCA: cierra etapa de carga y valida expedientes demo. */
-    private function prepararDemoCCA(Periodo $periodo, array $academicos): void
+    /** Compromiso APA precargado solo para academico@ (ejemplo de académico que ya declaró). */
+    private function crearCompromisosDemo(Periodo $periodo, array $academicos): void
     {
-        $ayer = Carbon::yesterday()->toDateString();
-
-        Cronograma::where('periodo_id', $periodo->id)
-            ->where('etapa', 'carga_evidencias')
-            ->update([
-                'fecha_inicio' => Carbon::today()->subDays(60)->toDateString(),
-                'fecha_fin'    => $ayer,
-            ]);
-
-        // academico@ucm.cl (0) y Roberto Vidal (4) → validados por secretario
-        foreach ([0, 4] as $i) {
-            if (!isset($academicos[$i])) {
-                continue;
-            }
-            Nomina::where('periodo_id', $periodo->id)
-                ->where('user_id', $academicos[$i]->id)
-                ->update(['estado' => 'carga_cerrada']);
+        if (!isset($academicos[0])) {
+            return;
         }
+
+        $nomina = Nomina::where('periodo_id', $periodo->id)
+            ->where('user_id', $academicos[0]->id)
+            ->first();
+
+        if (!$nomina) {
+            return;
+        }
+
+        CompromisoApa::updateOrCreate(
+            ['nomina_id' => $nomina->id],
+            [
+                'periodo_id'         => $periodo->id,
+                'pct_docencia'       => 50,
+                'pct_investigacion'  => 25,
+                'pct_extension'      => 10,
+                'pct_administracion' => 10,
+                'pct_otras'          => 5,
+                'fuente'             => 'manual',
+                'confirmado_en'      => now(),
+            ]
+        );
     }
 
     /**

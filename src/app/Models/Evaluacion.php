@@ -17,12 +17,15 @@ class Evaluacion extends Model
         'puntaje_docencia', 'puntaje_investigacion',
         'puntaje_vinculacion', 'puntaje_gestion', 'puntaje_formacion',
         'comentario', 'es_apelacion',
+        'vigente_hasta', 'sin_calificacion', 'motivo_sc',
     ];
 
     protected function casts(): array
     {
         return [
             'es_apelacion'          => 'boolean',
+            'sin_calificacion'      => 'boolean',
+            'vigente_hasta'         => 'date',
             'puntaje_docencia'      => 'decimal:1',
             'puntaje_investigacion' => 'decimal:1',
             'puntaje_vinculacion'   => 'decimal:1',
@@ -31,11 +34,16 @@ class Evaluacion extends Model
         ];
     }
 
-    public function notaFinalCad(?string $categoriaAcademica): float
+    public function notaFinalCad(?string $categoriaAcademica, ?CompromisoApa $compromiso = null): float
     {
+        if (!$compromiso && $this->relationLoaded('nomina')) {
+            $compromiso = $this->nomina->compromisoApa;
+        }
+
         return \App\Services\CalificacionCadService::calcularDesdeEvaluacion(
             $this,
-            $categoriaAcademica
+            $categoriaAcademica,
+            $compromiso
         );
     }
 
@@ -56,5 +64,10 @@ class Evaluacion extends Model
     public function evaluador(): BelongsTo
     {
         return $this->belongsTo(User::class, 'evaluador_id');
+    }
+
+    public function comentariosVicerrectora(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(ComentarioVicerrectora::class);
     }
 }

@@ -62,11 +62,6 @@ class Solicitud extends Model
         return $this->estado === 'activa';
     }
 
-    public function estaPendiente(): bool
-    {
-        return $this->estado === 'pendiente_aprobacion';
-    }
-
     public function esLicenciaMedica(): bool
     {
         return $this->tipo === 'licencia_medica';
@@ -84,11 +79,9 @@ class Solicitud extends Model
     public function labelEstado(): string
     {
         return match ($this->estado) {
-            'pendiente_aprobacion' => 'Pendiente de aprobación',
-            'activa'               => 'Activa',
-            'cerrada'              => 'Cerrada',
-            'rechazada'            => 'Rechazada',
-            default                => $this->estado,
+            'activa'  => 'Activa',
+            'cerrada' => 'Cerrada',
+            default   => $this->estado,
         };
     }
 
@@ -97,8 +90,4 @@ class Solicitud extends Model
         return $query->where('estado', 'activa');
     }
 
-    public function scopePendientesAprobacion($query)
-    {
-        return $query->where('estado', 'pendiente_aprobacion');
-    }
 }

@@ -67,13 +67,23 @@ class StorePeriodoRequest extends FormRequest
                 }
             }
 
-            $cargaFin = $finesPorEtapa->get('carga_evidencias');
-            $ccaFin   = $finesPorEtapa->get('evaluacion_cca');
+            $secuencia = [
+                ['actual' => 'evaluacion_cca',         'previa' => 'carga_evidencias',      'label' => 'Evaluación CCA'],
+                ['actual' => 'consejo_facultad',       'previa' => 'evaluacion_cca',        'label' => 'Consejo de Facultad'],
+                ['actual' => 'apelaciones',            'previa' => 'consejo_facultad',      'label' => 'Apelaciones'],
+                ['actual' => 'revision_vicerrectoria', 'previa' => 'apelaciones',           'label' => 'Revisión Vicerrectoría'],
+                ['actual' => 'cierre',                 'previa' => 'revision_vicerrectoria','label' => 'Cierre'],
+            ];
 
-            if ($cargaFin && $ccaFin && $ccaFin < $cargaFin) {
-                $idx = collect($cronograma)->search(fn ($e) => ($e['etapa'] ?? null) === 'evaluacion_cca');
-                $key = $idx !== false ? "cronograma.$idx.fecha_fin" : 'cronograma';
-                $v->errors()->add($key, 'La evaluación CCA no puede cerrar antes que la carga de evidencias.');
+            foreach ($secuencia as $par) {
+                $finActual  = $finesPorEtapa->get($par['actual']);
+                $finPrevia  = $finesPorEtapa->get($par['previa']);
+
+                if ($finActual && $finPrevia && $finActual < $finPrevia) {
+                    $idx = collect($cronograma)->search(fn ($e) => ($e['etapa'] ?? null) === $par['actual']);
+                    $key = $idx !== false ? "cronograma.$idx.fecha_fin" : 'cronograma';
+                    $v->errors()->add($key, "{$par['label']} no puede cerrar antes que la etapa anterior.");
+                }
             }
         });
     }

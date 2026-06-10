@@ -62,13 +62,15 @@ function conceptoDesdeNota(nota) {
 
 export default function EvaluarExpediente({
     nomina, categorias, pesosReglamento, evidenciasPorCategoria,
-    miEvaluacion, todasEvaluaciones, calificacionFinal, esApelacion,
+    miEvaluacion, todasEvaluaciones, calificacionFinal, esApelacion, sinCompromisoApa,
 }) {
     const { flash } = usePage().props;
     const badge = ESTADOS[nomina.estado] ?? { label: nomina.estado, cls: 'bg-gray-100 text-gray-600' };
     const bloqueado = nomina.estado === 'evaluado';
 
     const evalForm = useForm({
+        sin_calificacion:      miEvaluacion?.sin_calificacion      ?? false,
+        motivo_sc:             miEvaluacion?.motivo_sc             ?? '',
         puntaje_docencia:      miEvaluacion?.puntaje_docencia      ?? 3.0,
         puntaje_investigacion: miEvaluacion?.puntaje_investigacion ?? 3.0,
         puntaje_vinculacion:   miEvaluacion?.puntaje_vinculacion   ?? 3.0,
@@ -80,7 +82,9 @@ export default function EvaluarExpediente({
     const finalForm = useForm({ observacion: '' });
 
     const notaCalculada = useMemo(
-        () => calcularNotaFinal(evalForm.data, categorias, pesosReglamento),
+        () => evalForm.data.sin_calificacion
+            ? 0
+            : calcularNotaFinal(evalForm.data, categorias, pesosReglamento),
         [evalForm.data, categorias, pesosReglamento]
     );
 
@@ -110,6 +114,11 @@ export default function EvaluarExpediente({
                     </Link>
                 </div>
 
+                {sinCompromisoApa && (
+                    <div className="mb-5 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                        Este académico no ha declarado su distribución APA.
+                    </div>
+                )}
                 {flash?.success && (
                     <div className="mb-5 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
                         {flash.success}
@@ -149,7 +158,7 @@ export default function EvaluarExpediente({
 
                     <div className="mt-4 pt-4 border-t border-gray-200">
                         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                            % tiempo asignado por área APA (reglamento)
+                            % tiempo asignado por área APA (declaración del académico)
                         </p>
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                             {categorias.map(cat => (
@@ -245,7 +254,27 @@ export default function EvaluarExpediente({
                                         Ingrese nota 1.0 – 5.0 por área. Fórmula: min(Σ(%T × N) / 100, 5.0)
                                     </p>
 
-                                    {categorias.map(cat => {
+                                    <label className="flex items-center gap-2 text-sm">
+                                        <input type="checkbox"
+                                            checked={evalForm.data.sin_calificacion}
+                                            disabled={bloqueado}
+                                            onChange={e => evalForm.setData('sin_calificacion', e.target.checked)}
+                                            className="rounded border-gray-300" />
+                                        Sin calificación (casos especiales)
+                                    </label>
+                                    {evalForm.data.sin_calificacion && (
+                                        <div>
+                                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                                                Motivo sin calificación <span className="text-red-500">*</span>
+                                            </label>
+                                            <textarea rows={2} value={evalForm.data.motivo_sc}
+                                                disabled={bloqueado}
+                                                onChange={e => evalForm.setData('motivo_sc', e.target.value)}
+                                                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" />
+                                        </div>
+                                    )}
+
+                                    {!evalForm.data.sin_calificacion && categorias.map(cat => {
                                         const campo = SLUGS_A_CAMPO[cat.slug];
                                         const val   = evalForm.data[campo] ?? 3;
                                         return (

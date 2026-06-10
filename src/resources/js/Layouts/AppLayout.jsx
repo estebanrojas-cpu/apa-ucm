@@ -6,6 +6,7 @@ const roleLabels = {
     secretario:     'Secretario',
     miembro_cca:    'Miembro CCA',
     jefe_academico: 'Jefe Académico',
+    vicerrectora:   'Vicerrectoría',
     academico:      'Académico',
 };
 
@@ -31,6 +32,10 @@ const navByRole = {
     jefe_academico: [
         { label: 'Dashboard',  href: '/jefe/dashboard',  icon: 'grid' },
         { label: 'Académicos', href: '/jefe/academicos', icon: 'folder' },
+    ],
+    vicerrectora: [
+        { label: 'Dashboard',   href: '/vicerrectora/dashboard',   icon: 'grid' },
+        { label: 'Calificaciones', href: '/vicerrectora/academicos', icon: 'folder' },
     ],
     academico: [
         { label: 'Dashboard',  href: '/academico/dashboard',  icon: 'grid' },

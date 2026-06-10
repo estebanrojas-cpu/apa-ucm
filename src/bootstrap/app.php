@@ -20,6 +20,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->alias([
             'role'                 => \App\Http\Middleware\RoleMiddleware::class,
             'academico.no_licencia'=> \App\Http\Middleware\BlockAcademicoLicencia::class,
+            'compromiso.apa'       => \App\Http\Middleware\EnsureCompromisoApa::class,
         ]);
         $middleware->redirectUsersTo(
             fn (Request $request) => AuthController::dashboardRouteFor($request->user()?->role)

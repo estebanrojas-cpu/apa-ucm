@@ -10,9 +10,20 @@ class ComentarioVicerrectora extends Model
 {
     use HasUuids;
 
+    public $timestamps = false;
+
     protected $table = 'comentarios_vicerrectora';
 
-    protected $fillable = ['evaluacion_id', 'comentario', 'creado_por'];
+    protected $fillable = [
+        'evaluacion_id', 'comentario', 'creado_por', 'created_at',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'created_at' => 'datetime',
+        ];
+    }
 
     public function evaluacion(): BelongsTo
     {

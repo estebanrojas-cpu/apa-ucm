@@ -118,6 +118,23 @@ class DashboardController extends Controller
         ]);
     }
 
+    public function vicerrectora(): Response
+    {
+        $periodo = Periodo::where('estado', 'activo')->latest()->first();
+
+        $evaluados = 0;
+        if ($periodo) {
+            $evaluados = Nomina::where('periodo_id', $periodo->id)
+                ->whereIn('estado', ['evaluado', 'cerrado'])
+                ->count();
+        }
+
+        return Inertia::render('Dashboard/Vicerrectora', [
+            'stats'   => ['evaluados' => $evaluados],
+            'periodo' => $periodo?->only(['nombre', 'anio']),
+        ]);
+    }
+
     public function academico(): Response
     {
         $user    = auth()->user();

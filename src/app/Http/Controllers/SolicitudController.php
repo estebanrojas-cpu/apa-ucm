@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\CompromisoApa;
 use App\Models\Nomina;
 use App\Models\Notificacion;
 use App\Models\Periodo;
@@ -37,7 +38,7 @@ class SolicitudController extends Controller
                     'label' => "{$n->academico->name} ({$n->academico->rut})",
                 ]);
 
-            $solicitudes = Solicitud::with(['nomina.academico', 'aprobadaPor'])
+            $solicitudes = Solicitud::with(['nomina.academico', 'reincorporadoPor'])
                 ->whereHas('nomina', fn ($q) => $q
                     ->where('periodo_id', $periodo->id)
                     ->whereHas('academico', fn ($q2) => $q2->where('facultad_id', $user->facultad_id)))
@@ -65,7 +66,7 @@ class SolicitudController extends Controller
 
         $documentoPath = $this->guardarDocumento($request, $nomina);
 
-        $solicitud = Solicitud::create([
+        Solicitud::create([
             'nomina_id'         => $nomina->id,
             'tipo'              => $data['tipo'],
             'fecha_inicio'      => $data['fecha_inicio'],
@@ -75,137 +76,53 @@ class SolicitudController extends Controller
             'estado'            => 'activa',
             'creado_por'        => $user->id,
             'iniciada_por'      => $user->id,
-            'aprobada_por'      => $user->id,
-            'fecha_aprobacion'  => now(),
         ]);
 
-        // Bloquear acceso al académico mientras la solicitud esté activa
-        $nomina->academico->update(['bloqueado_por_licencia' => true]);
+        $this->aplicarEfectosActivacion(
+            $nomina,
+            $data['tipo'],
+            $data['motivo'],
+            $data['fecha_fin'] ?? null
+        );
 
-        $this->notificarAnalistas(
+        $this->notificarVisibilidadCCDA(
             'solicitud_registrada',
-            'Nueva solicitud registrada por secretario',
+            'Nueva solicitud registrada',
             "El secretario {$user->name} registró una solicitud de {$this->labelTipo($data['tipo'])} "
-            . "para {$nomina->academico->name}.",
+            . "para {$nomina->academico->name}. La solicitud quedó activa.",
             route('analista.solicitudes')
         );
 
-        return back()->with('success', 'Solicitud registrada y activada.');
-    }
-
-    // ── Analista CCDA ─────────────────────────────────────────────────────
-
-    public function indexAnalista(): Response
-    {
-        $periodo = Periodo::where('estado', 'activo')->latest()->first();
-
-        $pendientes = collect();
-        $historial  = collect();
-
-        if ($periodo) {
-            $baseQuery = Solicitud::with([
-                'nomina.academico.facultad', 'iniciadaPor', 'aprobadaPor',
-            ])->whereHas('nomina', fn ($q) => $q->where('periodo_id', $periodo->id));
-
-            $pendientes = (clone $baseQuery)
-                ->pendientesAprobacion()
-                ->orderBy('created_at')
-                ->get()
-                ->map(fn (Solicitud $s) => $this->serializar($s, 'analista'));
-
-            $historial = (clone $baseQuery)
-                ->with('reincorporadoPor')
-                ->whereIn('estado', ['activa', 'cerrada', 'rechazada'])
-                ->orderByDesc('created_at')
-                ->get()
-                ->map(fn (Solicitud $s) => $this->serializar($s, 'analista'));
-        }
-
-        return Inertia::render('AnalistaCCDA/Solicitudes', [
-            'periodo'    => $periodo?->only(['id', 'anio', 'nombre']),
-            'pendientes' => $pendientes->values(),
-            'historial'  => $historial->values(),
-        ]);
-    }
-
-    public function aprobar(Solicitud $solicitud)
-    {
-        if ($solicitud->estado !== 'pendiente_aprobacion') {
-            return back()->with('error', 'Esta solicitud no está pendiente de aprobación.');
-        }
-
-        $solicitud->load('nomina.academico', 'iniciadaPor');
-        $analista = auth()->user();
-        $ahora    = now();
-
-        $solicitud->update([
-            'estado'           => 'activa',
-            'aprobada_por'     => $analista->id,
-            'fecha_aprobacion' => $ahora,
-        ]);
-
-        $this->aplicarEfectosAprobacion(
-            $solicitud->nomina,
-            $solicitud->tipo,
-            $solicitud->motivo,
-            $solicitud->fecha_fin?->toDateString()
-        );
-
-        if ($solicitud->iniciadaPor) {
+        if ($data['tipo'] === 'licencia_medica') {
             Notificacion::create([
-                'user_id' => $solicitud->iniciada_por,
-                'tipo'    => 'solicitud_aprobada',
-                'titulo'  => 'Solicitud aprobada por CCDA',
-                'mensaje' => "La solicitud de {$solicitud->labelTipo()} para {$solicitud->nomina->academico->name} "
-                    . 'fue aprobada. El académico queda con acceso restringido según corresponda.',
+                'user_id' => $nomina->academico->id,
+                'tipo'    => 'licencia_medica',
+                'titulo'  => 'Licencia médica registrada',
+                'mensaje' => 'Se registró una licencia médica a su nombre. Su acceso al sistema queda suspendido hasta reincorporación.',
                 'leida'   => false,
-                'url'     => route('secretario.solicitudes'),
+                'url'     => null,
             ]);
         }
 
-        return back()->with('success', 'Solicitud aprobada. El académico queda con las restricciones aplicadas.');
-    }
-
-    public function rechazar(Request $request, Solicitud $solicitud)
-    {
-        if ($solicitud->estado !== 'pendiente_aprobacion') {
-            return back()->with('error', 'Esta solicitud no está pendiente de aprobación.');
-        }
-
-        $data = $request->validate([
-            'motivo_rechazo' => ['required', 'string', 'min:10', 'max:2000'],
-        ], [
-            'motivo_rechazo.required' => 'Debe indicar el motivo del rechazo.',
-        ]);
-
-        $solicitud->load('nomina.academico', 'iniciadaPor');
-
-        $solicitud->update([
-            'estado'          => 'rechazada',
-            'aprobada_por'    => auth()->id(),
-            'motivo_rechazo'  => $data['motivo_rechazo'],
-            'fecha_aprobacion'=> now(),
-        ]);
-
-        if ($solicitud->iniciadaPor) {
-            Notificacion::create([
-                'user_id' => $solicitud->iniciada_por,
-                'tipo'    => 'solicitud_rechazada',
-                'titulo'  => 'Solicitud rechazada por CCDA',
-                'mensaje' => "La solicitud de {$solicitud->labelTipo()} para {$solicitud->nomina->academico->name} "
-                    . "fue rechazada. Motivo: {$data['motivo_rechazo']}",
-                'leida'   => false,
-                'url'     => route('secretario.solicitudes'),
-            ]);
-        }
-
-        return back()->with('success', 'Solicitud rechazada. Se notificó al secretario.');
+        return back()->with('success', 'Solicitud registrada y activa.');
     }
 
     public function reincorporar(Request $request, Solicitud $solicitud)
     {
         if ($solicitud->estado !== 'activa') {
             return back()->with('error', 'Solo se pueden reincorporar solicitudes activas.');
+        }
+
+        $user = $request->user();
+        $solicitud->load('nomina.academico.facultad', 'iniciadaPor');
+
+        if ($user->role === 'secretario') {
+            $this->autorizarNominaFacultad($solicitud->nomina, $user);
+            if ($solicitud->iniciada_por !== $user->id) {
+                abort(403, 'Solo puede reincorporar solicitudes que usted inició.');
+            }
+        } elseif ($user->role !== 'analista_ccda') {
+            abort(403);
         }
 
         $data = $request->validate([
@@ -216,19 +133,17 @@ class SolicitudController extends Controller
             'nuevo_plazo_evidencias.after_or_equal' => 'La fecha límite no puede ser anterior a hoy.',
         ]);
 
-        $solicitud->load('nomina.academico.facultad', 'iniciadaPor');
-        $analista = auth()->user();
-        $ahora    = now();
-        $nomina   = $solicitud->nomina;
-        $academico = $nomina->academico;
-        $fechaPlazo = $data['nuevo_plazo_evidencias'];
+        $ahora           = now();
+        $nomina          = $solicitud->nomina;
+        $academico       = $nomina->academico;
+        $fechaPlazo      = $data['nuevo_plazo_evidencias'];
         $fechaFormateada = \Carbon\Carbon::parse($fechaPlazo)->format('d/m/Y');
 
         $solicitud->update([
             'estado'                 => 'cerrada',
             'fecha_fin'              => $fechaPlazo,
             'fecha_reincorporacion'  => $ahora,
-            'reincorporado_por'      => $analista->id,
+            'reincorporado_por'      => $user->id,
             'motivo_reincorporacion' => $data['motivo_reincorporacion'] ?? null,
             'nuevo_plazo_evidencias' => $fechaPlazo,
         ]);
@@ -239,27 +154,7 @@ class SolicitudController extends Controller
             'plazo_licencia'       => $fechaPlazo,
         ]);
 
-        // Desbloquear acceso del académico
-        $academico->update(['bloqueado_por_licencia' => false]);
-
-        $mensajeSecretario = "{$academico->name} fue reincorporado al proceso CAD con plazo de evidencias "
-            . "hasta el {$fechaFormateada}.";
-
-        if ($data['motivo_reincorporacion'] ?? null) {
-            $mensajeSecretario .= " Motivo: {$data['motivo_reincorporacion']}";
-        }
-
-        User::activos()
-            ->deRol('secretario')
-            ->where('facultad_id', $academico->facultad_id)
-            ->each(fn (User $sec) => Notificacion::create([
-                'user_id' => $sec->id,
-                'tipo'    => 'reincorporacion',
-                'titulo'  => 'Académico reincorporado',
-                'mensaje' => $mensajeSecretario,
-                'leida'   => false,
-                'url'     => route('secretario.expedientes'),
-            ]));
+        CompromisoApa::where('nomina_id', $nomina->id)->delete();
 
         Notificacion::create([
             'user_id' => $academico->id,
@@ -271,6 +166,30 @@ class SolicitudController extends Controller
         ]);
 
         return back()->with('success', "Académico reincorporado. Nuevo plazo de evidencias: {$fechaFormateada}.");
+    }
+
+    // ── Analista CCDA (solo lectura) ──────────────────────────────────────
+
+    public function indexAnalista(): Response
+    {
+        $periodo = Periodo::where('estado', 'activo')->latest()->first();
+
+        $solicitudes = collect();
+
+        if ($periodo) {
+            $solicitudes = Solicitud::with([
+                'nomina.academico.facultad', 'iniciadaPor', 'reincorporadoPor',
+            ])
+                ->whereHas('nomina', fn ($q) => $q->where('periodo_id', $periodo->id))
+                ->orderByDesc('created_at')
+                ->get()
+                ->map(fn (Solicitud $s) => $this->serializar($s, 'analista'));
+        }
+
+        return Inertia::render('AnalistaCCDA/Solicitudes', [
+            'periodo'     => $periodo?->only(['id', 'anio', 'nombre']),
+            'solicitudes' => $solicitudes->values(),
+        ]);
     }
 
     public function downloadDocumento(Solicitud $solicitud): HttpResponse
@@ -316,12 +235,12 @@ class SolicitudController extends Controller
 
         $conflicto = $nomina->solicitudes()
             ->where('tipo', 'licencia_medica')
-            ->whereIn('estado', ['pendiente_aprobacion', 'activa'])
+            ->where('estado', 'activa')
             ->exists();
 
         if ($conflicto || $nomina->tieneLicenciaMedicaActiva()) {
             throw ValidationException::withMessages([
-                'nomina_id' => 'Este académico ya tiene una licencia médica pendiente o activa.',
+                'nomina_id' => 'Este académico ya tiene una licencia médica activa.',
             ]);
         }
     }
@@ -335,7 +254,7 @@ class SolicitudController extends Controller
         return $request->file('documento')->store("solicitudes/{$nomina->id}", 'public');
     }
 
-    private function aplicarEfectosAprobacion(Nomina $nomina, string $tipo, string $motivo, ?string $fechaFin): void
+    private function aplicarEfectosActivacion(Nomina $nomina, string $tipo, string $motivo, ?string $fechaFin): void
     {
         if ($tipo === 'licencia_medica') {
             $nomina->update([
@@ -347,7 +266,7 @@ class SolicitudController extends Controller
         }
     }
 
-    private function notificarAnalistas(string $tipo, string $titulo, string $mensaje, ?string $url): void
+    private function notificarVisibilidadCCDA(string $tipo, string $titulo, string $mensaje, ?string $url): void
     {
         User::activos()
             ->deRol('analista_ccda')
@@ -380,7 +299,7 @@ class SolicitudController extends Controller
         }
 
         if ($user->role === 'secretario') {
-            $esSuFacultad = $solicitud->nomina->academico->facultad_id === $user->facultad_id;
+            $esSuFacultad  = $solicitud->nomina->academico->facultad_id === $user->facultad_id;
             $esSuSolicitud = $solicitud->iniciada_por === $user->id;
 
             if ($esSuFacultad && $esSuSolicitud) {
@@ -398,31 +317,28 @@ class SolicitudController extends Controller
             : route('analista.solicitudes.documento', $s);
 
         return [
-            'id'                => $s->id,
-            'tipo'              => $s->tipo,
-            'tipo_label'        => $s->labelTipo(),
-            'estado'            => $s->estado,
-            'estado_label'      => $s->labelEstado(),
-            'fecha_inicio'      => $s->fecha_inicio->format('d/m/Y'),
-            'fecha_fin'         => $s->fecha_fin?->format('d/m/Y'),
-            'motivo'            => $s->motivo,
-            'motivo_rechazo'    => $s->motivo_rechazo,
-            'documento_adjunto' => $s->documento_adjunto,
-            'documento_url'     => $s->documento_adjunto ? $docRoute : null,
-            'academico'         => [
+            'id'                     => $s->id,
+            'tipo'                   => $s->tipo,
+            'tipo_label'             => $s->labelTipo(),
+            'estado'                 => $s->estado,
+            'estado_label'           => $s->labelEstado(),
+            'fecha_inicio'           => $s->fecha_inicio->format('d/m/Y'),
+            'fecha_fin'              => $s->fecha_fin?->format('d/m/Y'),
+            'motivo'                 => $s->motivo,
+            'documento_adjunto'      => $s->documento_adjunto,
+            'documento_url'          => $s->documento_adjunto ? $docRoute : null,
+            'academico'              => [
                 'name'     => $s->nomina->academico->name,
                 'rut'      => $s->nomina->academico->rut,
                 'facultad' => $s->nomina->academico->facultad?->nombre,
             ],
-            'nomina_id'         => $s->nomina_id,
-            'iniciada_por'      => $s->iniciadaPor?->name,
-            'aprobada_por'      => $s->aprobadaPor?->name,
-            'fecha_aprobacion'      => $s->fecha_aprobacion?->format('d/m/Y H:i'),
-            'fecha_reincorporacion' => $s->fecha_reincorporacion?->format('d/m/Y H:i'),
-            'reincorporado_por'     => $s->reincorporadoPor?->name,
-            'motivo_reincorporacion'=> $s->motivo_reincorporacion,
-            'nuevo_plazo_evidencias'=> $s->nuevo_plazo_evidencias?->format('d/m/Y'),
-            'created_at'            => $s->created_at->format('d/m/Y H:i'),
+            'nomina_id'              => $s->nomina_id,
+            'iniciada_por'           => $s->iniciadaPor?->name,
+            'fecha_reincorporacion'  => $s->fecha_reincorporacion?->format('d/m/Y H:i'),
+            'reincorporado_por'      => $s->reincorporadoPor?->name,
+            'motivo_reincorporacion' => $s->motivo_reincorporacion,
+            'nuevo_plazo_evidencias' => $s->nuevo_plazo_evidencias?->format('d/m/Y'),
+            'created_at'             => $s->created_at->format('d/m/Y H:i'),
         ];
     }
 }

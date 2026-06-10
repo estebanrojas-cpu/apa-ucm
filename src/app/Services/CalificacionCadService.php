@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\CompromisoApa;
+
 class CalificacionCadService
 {
     /** @var array<string, string> slug APA → campo evaluación */
@@ -30,6 +32,26 @@ class CalificacionCadService
     }
 
     /**
+     * % APA desde compromiso confirmado; fallback al reglamento por categoría.
+     *
+     * @return array<string, float|int>
+     */
+    public static function pesosDesdeCompromiso(?CompromisoApa $compromiso, ?string $categoria): array
+    {
+        if ($compromiso && $compromiso->estaConfirmado()) {
+            return $compromiso->toPesosArray();
+        }
+
+        return self::pesosParaCategoria($categoria);
+    }
+
+    /** @deprecated Use pesosDesdeCompromiso */
+    public static function pesosDesdeNomina(?object $nomina, ?string $categoria): array
+    {
+        return self::pesosParaCategoria($categoria);
+    }
+
+    /**
      * nota_final = min(Σ(%T_i × N_i) / 100, 5.0)
      *
      * @param  array<string, float|int|string>  $notas  slug => nota 1.0–5.0
@@ -48,14 +70,28 @@ class CalificacionCadService
         return round(min($suma, 5.0), 2);
     }
 
-    public static function calcularDesdeEvaluacion(object $evaluacion, ?string $categoriaAcademica): float
+    public static function calcularDesdeEvaluacion(object $evaluacion, ?string $categoriaAcademica, ?\App\Models\CompromisoApa $compromiso = null): float
     {
+        if (!empty($evaluacion->sin_calificacion)) {
+            return 0.0;
+        }
+
         $notas = [];
         foreach (self::CAMPOS as $slug => $campo) {
             $notas[$slug] = (float) $evaluacion->{$campo};
         }
 
-        return self::calcularNotaFinal($notas, self::pesosParaCategoria($categoriaAcademica));
+        return self::calcularNotaFinal(
+            $notas,
+            self::pesosDesdeCompromiso($compromiso, $categoriaAcademica)
+        );
+    }
+
+    public static function vigenteHasta(?string $categoria): \Carbon\Carbon
+    {
+        return $categoria === 'auxiliar'
+            ? now()->addYear()
+            : now()->addYears(2);
     }
 
     public static function conceptoDesdeNota(float $nota): string

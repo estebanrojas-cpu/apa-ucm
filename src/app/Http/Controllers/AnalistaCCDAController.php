@@ -9,6 +9,7 @@ use App\Models\Facultad;
 use App\Models\Nomina;
 use App\Models\Periodo;
 use App\Models\PlazoFacultad;
+use App\Models\ReporteHistorial;
 use App\Services\CalificacionCadService;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -150,6 +151,14 @@ class AnalistaCCDAController extends Controller
                 ],
             ];
         })->filter()->values();
+
+        ReporteHistorial::create([
+            'periodo_id'    => $periodo->id,
+            'facultad_id'   => $facultadFiltro ?: null,
+            'generado_por'  => auth()->id(),
+            'tipo'          => 'calificaciones',
+            'created_at'    => now(),
+        ]);
 
         return view('analista.reporte_calificaciones', compact(
             'periodo', 'facultades', 'todasFacultades', 'facultadFiltro'

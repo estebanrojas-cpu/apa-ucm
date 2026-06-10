@@ -24,6 +24,8 @@ Thumbs.db
 .idea/
 .vscode/
 *.iml
+.claude/
+src/.claude/
 
 # Variables de entorno locales
 .env

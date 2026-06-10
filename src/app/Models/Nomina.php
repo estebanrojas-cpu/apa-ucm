@@ -13,7 +13,7 @@ class Nomina extends Model
     use HasUuids;
 
     protected $fillable = [
-        'periodo_id', 'user_id', 'estado',
+        'periodo_id', 'user_id', 'facultad_id', 'estado',
         'con_licencia', 'observacion_licencia', 'plazo_licencia', 'documento_licencia',
         'observacion_secretario',
         // Campos SAPD UCM
@@ -41,13 +41,54 @@ class Nomina extends Model
         return in_array($this->estado, ['pendiente', 'en_carga']);
     }
 
+    public function cargaEvidenciasHabilitada(): bool
+    {
+        if (!$this->puedeCargarEvidencias()) {
+            return false;
+        }
+
+        $facultadId = $this->facultad_id ?? $this->academico?->facultad_id;
+        if (!$facultadId) {
+            return false;
+        }
+
+        $plazo = PlazoFacultad::where('periodo_id', $this->periodo_id)
+            ->where('facultad_id', $facultadId)
+            ->first();
+
+        if ($plazo?->estaCerradoFormalmente()) {
+            return false;
+        }
+
+        $plazoIndividualVigente = $this->plazo_licencia
+            && $this->plazo_licencia->toDateString() >= now()->toDateString();
+
+        if ($this->con_licencia && !$plazoIndividualVigente) {
+            return false;
+        }
+
+        if ($plazoIndividualVigente) {
+            return true;
+        }
+
+        $etapaCarga = Cronograma::where('periodo_id', $this->periodo_id)
+            ->where('etapa', 'carga_evidencias')
+            ->first();
+
+        if ($etapaCarga?->haTerminado()) {
+            return false;
+        }
+
+        return $plazo === null || $plazo->estaVigente();
+    }
+
     public function estaEnEvaluacion(): bool
     {
         return $this->estado === 'en_evaluacion';
     }
 
     /**
-     * Devuelve la categoría efectiva: primero del campo SAPD en nómina,
+     * Categoría efectiva: primero del campo SAPD de la nómina,
      * luego del perfil del usuario (compatibilidad legada).
      */
     public function categoriaEfectiva(): string
@@ -58,8 +99,8 @@ class Nomina extends Model
     }
 
     /**
-     * Devuelve la nota vigente más reciente desde historial_calificaciones.
-     * Si no hay historial, cae al campo legado en el usuario.
+     * Nota vigente más reciente desde historial_calificaciones.
+     * Cae al campo legado en el usuario si no hay historial.
      */
     public function notaAnterior(): ?float
     {
@@ -82,9 +123,8 @@ class Nomina extends Model
     }
 
     /**
-     * Calcula si la nota está vigente según la categoría y fecha de categorización.
-     * - Auxiliar: vigente 1 año desde fecha_categorizacion
-     * - Adjunto / Titular: vigente 2 años
+     * ¿La nota sigue vigente según la categoría y fecha de categorización?
+     * - Auxiliar: 1 año   — Adjunto/Titular: 2 años
      */
     public function notaVigente(): bool
     {
@@ -112,6 +152,11 @@ class Nomina extends Model
         return $this->fecha_categorizacion->copy()->addMonths($meses);
     }
 
+    public function tieneCompromisoApaConfirmado(): bool
+    {
+        return $this->compromisoApa && $this->compromisoApa->estaConfirmado();
+    }
+
     // ── Relaciones ───────────────────────────────────────────────────────
 
     public function periodo(): BelongsTo
@@ -122,6 +167,11 @@ class Nomina extends Model
     public function academico(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function facultad(): BelongsTo
+    {
+        return $this->belongsTo(Facultad::class);
     }
 
     public function evidencias(): HasMany
@@ -152,6 +202,11 @@ class Nomina extends Model
     public function historialCategorias(): HasMany
     {
         return $this->hasMany(HistorialCategoria::class)->orderByDesc('anio');
+    }
+
+    public function compromisoApa(): HasOne
+    {
+        return $this->hasOne(CompromisoApa::class);
     }
 
     public function calificacionFinal(): HasOne
@@ -212,17 +267,17 @@ class Nomina extends Model
         if ($licencia) {
             $hasta = $licencia->fecha_fin?->format('d/m/Y') ?? 'indefinido';
 
-            return "Pendiente - Licencia hasta {$hasta}";
+            return "Pendiente hasta {$hasta}";
         }
 
-        $pendiente = $this->solicitudes()
-            ->where('tipo', 'licencia_medica')
-            ->where('estado', 'pendiente_aprobacion')
-            ->latest()
-            ->first();
+        $sinCalif = $this->evaluaciones
+            ->where('es_apelacion', false)
+            ->first(fn ($e) => $e->sin_calificacion ?? false);
 
-        if ($pendiente) {
-            return 'Pendiente - Licencia (aprobación CCDA)';
+        if ($sinCalif) {
+            $motivo = $sinCalif->motivo_sc ? " — {$sinCalif->motivo_sc}" : '';
+
+            return "S/C{$motivo}";
         }
 
         if (in_array($this->estado, ['evaluado', 'cerrado'])) {

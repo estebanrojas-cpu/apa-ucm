@@ -25,7 +25,7 @@ class EvidenciaController extends Controller
         $categorias = CategoriaApa::orderBy('orden')->get();
 
         if ($periodo) {
-            $nomina = Nomina::with(['evidenciasNormales.categoria', 'evidenciasApelacion.categoria', 'apelacion'])
+        $nomina = Nomina::with(['evidenciasNormales.categoria', 'evidenciasApelacion.categoria', 'apelacion', 'academico'])
                 ->where('periodo_id', $periodo->id)
                 ->where('user_id', $user->id)
                 ->first();
@@ -44,22 +44,7 @@ class EvidenciaController extends Controller
             }
         }
 
-        $cerradoFormalmente = $plazo['cerrado'] ?? false;
-
-        $plazoIndividualVigente = $nomina
-            && $nomina->plazo_licencia
-            && $nomina->plazo_licencia->toDateString() >= now()->toDateString();
-
-        if ($nomina && ($nomina->con_licencia || $plazoIndividualVigente)) {
-            $puedeCargar = $nomina->puedeCargarEvidencias()
-                && !$cerradoFormalmente
-                && $plazoIndividualVigente;
-        } else {
-            $puedeCargar = $nomina
-                && $nomina->puedeCargarEvidencias()
-                && !$cerradoFormalmente
-                && ($plazo === null || $plazo['vigente']);
-        }
+        $puedeCargar = $nomina && $nomina->cargaEvidenciasHabilitada();
 
         $evidenciasPorCategoria = [];
         if ($nomina) {

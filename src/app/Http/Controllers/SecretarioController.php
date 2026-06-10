@@ -43,12 +43,9 @@ class SecretarioController extends Controller
                     'con_licencia'         => $n->con_licencia,
                     'observacion_licencia' => $n->observacion_licencia,
                     'tiene_licencia_activa'=> $n->tieneLicenciaMedicaActiva(),
-                    'licencia_pendiente'   => $n->tieneSolicitudLicenciaPendiente(),
                     'estado_especial'      => $n->tieneLicenciaMedicaActiva()
                         ? 'Caso especial - Licencia médica'
-                        : ($n->tieneSolicitudLicenciaPendiente()
-                            ? 'Licencia médica — pendiente aprobación CCDA'
-                            : ($n->con_licencia ? 'Caso especial' : null)),
+                        : ($n->con_licencia ? 'Caso especial' : null),
                     'academico'            => [
                         'name' => $n->academico->name,
                         'rut'  => $n->academico->rut,
@@ -145,10 +142,7 @@ class SecretarioController extends Controller
             'evidenciasPorCategoria' => $evidenciasPorCategoria,
             'totalEvidencias'        => $evidencias->count(),
             'apelacion'              => $this->formatApelacion($nomina),
-            'calificacionFinal'      => $nomina->calificacionFinal ? [
-                'puntaje_total' => $nomina->calificacionFinal->puntaje_total,
-                'calificacion'  => $nomina->calificacionFinal->calificacion,
-            ] : null,
+            'calificacionFinal'      => null,
         ]);
     }
 
@@ -164,7 +158,7 @@ class SecretarioController extends Controller
             ->get();
 
         $conApelacionPendiente = $nominas->filter(
-            fn ($n) => $n->apelacion && $n->apelacion->estado === 'pendiente'
+            fn ($n) => $n->apelacion && in_array($n->apelacion->estado, ['solicitada', 'en_revision'])
         )->count();
 
         if ($conApelacionPendiente > 0) {
@@ -263,10 +257,7 @@ class SecretarioController extends Controller
                 'nombre'       => $n->academico->name,
                 'rut'          => $n->academico->rut,
                 'departamento' => $n->academico->departamento?->nombre,
-                'calificacion' => $n->calificacionFinal?->calificacion,
-                'puntaje'      => $n->calificacionFinal?->puntaje_total,
-                'es_apelacion' => $n->calificacionFinal?->es_apelacion ?? false,
-                'observacion'  => $n->calificacionFinal?->observacion,
+                'estado'       => $n->estado,
             ]);
 
         return view('secretario.acta_cierre', compact('acta', 'periodo', 'facultad', 'nominas'));

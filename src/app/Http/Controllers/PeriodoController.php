@@ -37,7 +37,7 @@ class PeriodoController extends Controller
     {
         if (Periodo::where('estado', '!=', 'cerrado')->exists()) {
             return back()->withErrors([
-                'periodo' => 'No se puede crear un nuevo período mientras exista uno activo sin cerrar.',
+                'periodo' => 'No se puede crear un nuevo período mientras exista uno sin cerrar.',
             ]);
         }
 
