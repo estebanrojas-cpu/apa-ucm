@@ -63,21 +63,52 @@ class VicerrectoraController extends Controller
 
     public function show(Nomina $nomina): Response
     {
-        $nomina->load(['academico.facultad', 'evidenciasNormales.categoria', 'evaluaciones.evaluador']);
+        $nomina->load([
+            'academico.facultad',
+            'evidenciasNormales.categoria',
+            'evaluaciones.evaluador',
+            'calificacionFinal',
+            'apelacion',
+            'compromisoApa',
+        ]);
+
+        $cf       = $nomina->calificacionFinal;
+        $categoria = $nomina->categoriaEfectiva();
 
         return Inertia::render('Vicerrectora/Expediente', [
             'nomina' => [
-                'id'        => $nomina->id,
-                'estado'    => $nomina->estado,
+                'id'     => $nomina->id,
+                'estado' => $nomina->estado,
                 'academico' => [
                     'name'     => $nomina->academico->name,
                     'rut'      => $nomina->academico->rut,
+                    'email'    => $nomina->academico->email,
                     'facultad' => $nomina->academico->facultad?->nombre,
-                    'categoria'=> CalificacionCadService::labelCategoria(
-                        $nomina->categoria ?? $nomina->academico->categoria_academica
-                    ),
+                    'categoria'=> CalificacionCadService::labelCategoria($categoria),
                 ],
-                'evidencias_count' => $nomina->evidenciasNormales->count(),
+                'calificacion' => $cf ? [
+                    'nota_final'  => number_format((float) $cf->nota_final, 2),
+                    'concepto'    => $cf->calificacionLabel(),
+                    'observacion' => $cf->observacion,
+                    'fecha'       => $cf->fecha?->format('d/m/Y'),
+                    'es_apelacion'=> $cf->es_apelacion,
+                ] : null,
+                'evaluaciones' => $nomina->evaluaciones
+                    ->where('es_apelacion', false)
+                    ->map(fn ($e) => [
+                        'evaluador'  => $e->evaluador?->name,
+                        'comentario' => $e->comentario,
+                    ])->values(),
+                'evidencias' => $nomina->evidenciasNormales->map(fn ($ev) => [
+                    'nombre'    => $ev->nombre_archivo,
+                    'categoria' => $ev->categoria?->nombre,
+                    'fecha'     => $ev->created_at?->format('d/m/Y'),
+                ])->values(),
+                'apelacion' => $nomina->apelacion ? [
+                    'estado'  => $nomina->apelacion->estado,
+                    'motivo'  => $nomina->apelacion->motivo,
+                    'destino' => $nomina->apelacion->destino ?? 'cca',
+                ] : null,
             ],
         ]);
     }
