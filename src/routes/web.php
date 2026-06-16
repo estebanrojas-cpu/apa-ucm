@@ -72,6 +72,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/apelaciones/{nomina}/evaluar',                                [AnalistaCCDAController::class, 'storeApelacion'])->name('analista.apelaciones.evaluar');
         Route::post('/apelaciones/{nomina}/finalizar',                              [AnalistaCCDAController::class, 'finalizeApelacion'])->name('analista.apelaciones.finalizar');
         Route::get('/apelaciones/{nomina}/evidencias/{evidencia}/descargar',        [AnalistaCCDAController::class, 'downloadEvidenciaApelacion'])->name('analista.apelaciones.evidencia.download');
+        Route::get('/apelaciones/{nomina}/evidencias/{evidencia}/previsualizar',   [AnalistaCCDAController::class, 'previewEvidenciaApelacion'])->name('analista.apelaciones.evidencia.preview');
     });
 
     Route::middleware('role:secretario')->prefix('secretario')->group(function () {
@@ -81,7 +82,8 @@ Route::middleware('auth')->group(function () {
         Route::patch('/expedientes/{nomina}/validar',                        [SecretarioController::class, 'validarExpediente'])->name('secretario.expedientes.validar');
         Route::patch('/expedientes/{nomina}/reabrir',                        [SecretarioController::class, 'reabrirExpediente'])->name('secretario.expedientes.reabrir');
         Route::post('/expedientes/{nomina}/licencia-plazo',                  [SecretarioController::class, 'setPlazolicencia'])->name('secretario.expedientes.licencia-plazo');
-        Route::get('/expedientes/{nomina}/evidencias/{evidencia}/descargar', [SecretarioController::class, 'downloadEvidencia'])->name('secretario.evidencias.download');
+        Route::get('/expedientes/{nomina}/evidencias/{evidencia}/descargar',      [SecretarioController::class, 'downloadEvidencia'])->name('secretario.evidencias.download');
+        Route::get('/expedientes/{nomina}/evidencias/{evidencia}/previsualizar', [SecretarioController::class, 'previewEvidencia'])->name('secretario.evidencias.preview');
         Route::patch('/apelaciones/{apelacion}/resolver',                    [ApelacionController::class,  'resolver'])->name('secretario.apelaciones.resolver');
         Route::patch('/apelaciones/{apelacion}/cerrar',                      [ApelacionController::class,  'cerrar'])->name('secretario.apelaciones.cerrar');
         Route::post('/plazos',                                               [SecretarioController::class, 'storePlazo'])->name('secretario.plazos.store');
@@ -100,7 +102,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/expedientes/{nomina}',                                  [EvaluacionController::class, 'show'])->name('cca.expedientes.show');
         Route::post('/expedientes/{nomina}/evaluar',                         [EvaluacionController::class, 'store'])->name('cca.expedientes.evaluar');
         Route::post('/expedientes/{nomina}/finalizar',                       [EvaluacionController::class, 'finalize'])->name('cca.expedientes.finalizar');
-        Route::get('/expedientes/{nomina}/evidencias/{evidencia}/descargar', [EvaluacionController::class, 'downloadEvidencia'])->name('cca.evidencias.download');
+        Route::get('/expedientes/{nomina}/evidencias/{evidencia}/descargar',      [EvaluacionController::class, 'downloadEvidencia'])->name('cca.evidencias.download');
+        Route::get('/expedientes/{nomina}/evidencias/{evidencia}/previsualizar', [EvaluacionController::class, 'previewEvidencia'])->name('cca.evidencias.preview');
         Route::get('/expedientes/{nomina}/calificacion-pdf',                 [EvaluacionController::class, 'imprimirCalificacion'])->name('cca.expedientes.calificacion-pdf');
     });
 
@@ -128,9 +131,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/dashboard',                                   [DashboardController::class, 'academico'])->name('academico.dashboard');
         Route::get('/evidencias',                                  [EvidenciaController::class, 'index'])->name('academico.evidencias');
         Route::post('/evidencias',                                 [EvidenciaController::class, 'store'])->name('academico.evidencias.store');
+        Route::get('/evidencias/categoria/{categoria}',            [EvidenciaController::class, 'showCategoria'])->name('academico.evidencias.categoria');
         Route::get('/evidencias/{evidencia}/descargar',            [EvidenciaController::class, 'download'])->name('academico.evidencias.download');
+        Route::get('/evidencias/{evidencia}/previsualizar',        [EvidenciaController::class, 'preview'])->name('academico.evidencias.preview');
         Route::delete('/evidencias/{evidencia}',                   [EvidenciaController::class, 'destroy'])->name('academico.evidencias.destroy');
-        Route::post('/apelacion',                                  [ApelacionController::class, 'store'])->name('academico.apelacion.store');
         Route::post('/evidencias-apelacion',                       [EvidenciaController::class, 'storeApelacion'])->name('academico.evidencias.apelacion.store');
         Route::delete('/evidencias-apelacion/{evidencia}',         [EvidenciaController::class, 'destroyApelacion'])->name('academico.evidencias.apelacion.destroy');
     });

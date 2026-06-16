@@ -138,7 +138,9 @@ class EvaluacionController extends Controller
                 'tamano'         => $ev->tamanoFormateado(),
                 'descripcion'    => $ev->descripcion,
                 'created_at'     => $ev->created_at->format('d/m/Y H:i'),
+                'mime_type'      => $ev->mime_type,
                 'url_descarga'   => route('cca.evidencias.download', [$nomina->id, $ev->id]),
+                'url_preview'    => route('cca.evidencias.preview',  [$nomina->id, $ev->id]),
             ];
         }
 
@@ -252,6 +254,25 @@ class EvaluacionController extends Controller
         }
 
         return Storage::disk('public')->download($evidencia->ruta, $evidencia->nombre_archivo);
+    }
+
+    public function previewEvidencia(Nomina $nomina, Evidencia $evidencia)
+    {
+        $user = auth()->user();
+
+        if ($nomina->academico->facultad_id !== $user->facultad_id) {
+            abort(403);
+        }
+
+        if ($evidencia->nomina_id !== $nomina->id) {
+            abort(404);
+        }
+
+        if (!Storage::disk('public')->exists($evidencia->ruta)) {
+            abort(404);
+        }
+
+        return Storage::disk('public')->response($evidencia->ruta, $evidencia->nombre_archivo);
     }
 
     public function store(Request $request, Nomina $nomina)

@@ -21,7 +21,7 @@ const CALIFICACIONES = {
     deficiente: 'Deficiente',
 };
 
-export default function ExpedienteDetalle({ nomina, categorias, evidenciasPorCategoria, totalEvidencias, apelacion, calificacionFinal }) {
+export default function ExpedienteDetalle({ nomina, categorias, evidenciasPorCategoria, evidenciasApelacionPorCategoria, totalEvidencias, apelacion, calificacionFinal }) {
     const { flash } = usePage().props;
     const badge = ESTADOS[nomina.estado] ?? { label: nomina.estado, cls: 'bg-gray-100 text-gray-600' };
     const puedeValidar  = PUEDE_VALIDAR.includes(nomina.estado);
@@ -132,12 +132,18 @@ export default function ExpedienteDetalle({ nomina, categorias, evidenciasPorCat
                                                             {ev.descripcion && ` · ${ev.descripcion}`}
                                                         </p>
                                                     </div>
-                                                    <a
-                                                        href={ev.url_descarga}
-                                                        className="shrink-0 text-xs text-[#0096D6] hover:underline flex items-center gap-1"
-                                                    >
-                                                        <DownloadIcon /> Descargar
-                                                    </a>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
+                                                        {MIME_PREVIEWABLE.includes(ev.mime_type) && (
+                                                            <a href={ev.url_preview} target="_blank" rel="noopener noreferrer"
+                                                                className="text-xs px-2.5 py-1 rounded-lg bg-[#1B2D6B] text-white hover:bg-[#152558] transition-colors">
+                                                                Ver
+                                                            </a>
+                                                        )}
+                                                        <a href={ev.url_descarga} download
+                                                            className="shrink-0 text-xs text-[#0096D6] hover:underline flex items-center gap-1">
+                                                            <DownloadIcon /> Descargar
+                                                        </a>
+                                                    </div>
                                                 </li>
                                             ))}
                                         </ul>
@@ -272,7 +278,11 @@ export default function ExpedienteDetalle({ nomina, categorias, evidenciasPorCat
 
                 {/* Sección de apelación */}
                 {apelacion && (
-                    <ApelacionPanel apelacion={apelacion} nominaId={nomina.id} />
+                    <ApelacionPanel
+                        apelacion={apelacion}
+                        nominaId={nomina.id}
+                        evidenciasApelacion={Object.values(evidenciasApelacionPorCategoria ?? {}).flat()}
+                    />
                 )}
 
             </AppLayout>
@@ -389,14 +399,10 @@ function LicenciaPanel({ nomina }) {
     );
 }
 
-function ApelacionPanel({ apelacion, nominaId }) {
-    const resolverForm = useForm({ accion: 'aprobar', resolucion: '' });
-    const cerrarForm   = useForm({});
+const MIME_PREVIEWABLE = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
 
-    function submitResolver(e) {
-        e.preventDefault();
-        resolverForm.patch(`/secretario/apelaciones/${apelacion.id}/resolver`, { preserveScroll: true });
-    }
+function ApelacionPanel({ apelacion, nominaId, evidenciasApelacion = [] }) {
+    const cerrarForm = useForm({});
 
     function submitCerrar(e) {
         e.preventDefault();
@@ -404,10 +410,9 @@ function ApelacionPanel({ apelacion, nominaId }) {
     }
 
     const estadoApelacion = {
-        solicitada:  { label: 'Solicitada',  cls: 'bg-yellow-100 text-yellow-700' },
-        en_revision: { label: 'En revisión', cls: 'bg-blue-100 text-blue-700' },
-        resuelta:    { label: 'Resuelta',    cls: 'bg-green-100 text-green-700' },
-        rechazada:   { label: 'Rechazada',   cls: 'bg-red-100 text-red-700' },
+        en_revision: { label: 'Con evidencias — pendiente de envío', cls: 'bg-blue-100 text-blue-700' },
+        resuelta:    { label: 'Resuelta',                            cls: 'bg-green-100 text-green-700' },
+        rechazada:   { label: 'Rechazada',                          cls: 'bg-red-100 text-red-700' },
     };
 
     const badge = estadoApelacion[apelacion.estado] ?? { label: apelacion.estado, cls: 'bg-gray-100 text-gray-600' };
@@ -415,80 +420,61 @@ function ApelacionPanel({ apelacion, nominaId }) {
     return (
         <div className="mt-6 bg-white border border-orange-200 rounded-xl p-5">
             <div className="flex items-center gap-3 mb-4">
-                <h2 className="text-sm font-semibold text-gray-800">Apelación</h2>
+                <h2 className="text-sm font-semibold text-gray-800">Apelación del académico</h2>
                 <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
             </div>
 
-            <div className="mb-4">
-                <p className="text-xs font-medium text-gray-500 mb-1">Motivo</p>
-                <p className="text-sm text-gray-700">{apelacion.motivo}</p>
-            </div>
-
-            {apelacion.resolucion && (
+            {/* Evidencias de apelación */}
+            {evidenciasApelacion.length > 0 ? (
                 <div className="mb-4">
-                    <p className="text-xs font-medium text-gray-500 mb-1">Resolución</p>
-                    <p className="text-sm text-gray-700">{apelacion.resolucion}</p>
+                    <p className="text-xs font-medium text-gray-500 mb-2">Evidencias adjuntadas ({evidenciasApelacion.length})</p>
+                    <ul className="space-y-2">
+                        {evidenciasApelacion.map(ev => (
+                            <li key={ev.id} className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-2.5 text-sm">
+                                <span className="flex-1 text-gray-800 truncate font-medium">{ev.nombre_archivo}</span>
+                                <span className="text-xs text-gray-400 shrink-0">{ev.tamano}</span>
+                                <div className="flex items-center gap-1.5 shrink-0">
+                                    {MIME_PREVIEWABLE.includes(ev.mime_type) && (
+                                        <a href={ev.url_preview} target="_blank" rel="noopener noreferrer"
+                                            className="text-xs px-2.5 py-1 rounded-lg bg-[#1B2D6B] text-white hover:bg-[#152558] transition-colors">
+                                            Ver
+                                        </a>
+                                    )}
+                                    <a href={ev.url_descarga} download
+                                        className="text-xs px-2.5 py-1 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors">
+                                        Descargar
+                                    </a>
+                                </div>
+                            </li>
+                        ))}
+                    </ul>
+                </div>
+            ) : (
+                <div className="mb-4 text-sm text-gray-400 italic">
+                    El académico aún no ha adjuntado evidencias de apelación.
                 </div>
             )}
 
-            {/* Acciones: aprobar o rechazar */}
-            {apelacion.estado === 'solicitada' && (
-                <form onSubmit={submitResolver} className="space-y-3 border-t border-gray-100 pt-4">
-                    <div className="flex gap-3">
-                        <label className={`flex-1 flex items-start gap-2 border rounded-xl p-3 cursor-pointer transition-colors ${
-                            resolverForm.data.accion === 'aprobar' ? 'border-green-500 bg-green-50' : 'border-gray-200'
-                        }`}>
-                            <input type="radio" name="accion" value="aprobar"
-                                checked={resolverForm.data.accion === 'aprobar'}
-                                onChange={() => resolverForm.setData('accion', 'aprobar')}
-                                className="mt-0.5 accent-green-600" />
-                            <div>
-                                <p className="text-sm font-semibold text-gray-800">Aprobar</p>
-                                <p className="text-xs text-gray-500">El académico podrá cargar nuevas evidencias.</p>
-                            </div>
-                        </label>
-                        <label className={`flex-1 flex items-start gap-2 border rounded-xl p-3 cursor-pointer transition-colors ${
-                            resolverForm.data.accion === 'rechazar' ? 'border-red-400 bg-red-50' : 'border-gray-200'
-                        }`}>
-                            <input type="radio" name="accion" value="rechazar"
-                                checked={resolverForm.data.accion === 'rechazar'}
-                                onChange={() => resolverForm.setData('accion', 'rechazar')}
-                                className="mt-0.5 accent-red-500" />
-                            <div>
-                                <p className="text-sm font-semibold text-gray-800">Rechazar</p>
-                                <p className="text-xs text-gray-500">La calificación original se mantiene.</p>
-                            </div>
-                        </label>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Resolución / observación (opcional)</label>
-                        <textarea rows={2} value={resolverForm.data.resolucion}
-                            onChange={e => resolverForm.setData('resolucion', e.target.value)}
-                            placeholder="Indique el fundamento de su decisión..."
-                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1B2D6B]/30 focus:border-[#1B2D6B] resize-none" />
-                    </div>
-                    <div className="flex justify-end">
-                        <button type="submit" disabled={resolverForm.processing}
-                            className="px-5 py-2.5 bg-[#1B2D6B] text-white text-sm font-medium rounded-lg hover:bg-[#152558] disabled:opacity-40 transition-colors">
-                            {resolverForm.processing ? 'Guardando...' : 'Confirmar resolución'}
-                        </button>
-                    </div>
-                </form>
-            )}
-
-            {/* Cerrar re-carga y enviar a CCA */}
+            {/* Enviar a evaluación */}
             {apelacion.estado === 'en_revision' && (
                 <form onSubmit={submitCerrar} className="border-t border-gray-100 pt-4">
                     <p className="text-xs text-gray-500 mb-3">
-                        Una vez que el académico haya cargado sus evidencias de apelación, cierre la revisión para que la CCA pueda re-evaluar.
+                        Al enviar, el sistema determinará automáticamente si la apelación va a la CCA
+                        (calificación Excelente / Muy Bueno / Bueno) o a la CCDA (Regular / Deficiente).
                     </p>
                     <div className="flex justify-end">
                         <button type="submit" disabled={cerrarForm.processing}
                             className="px-5 py-2.5 bg-purple-700 text-white text-sm font-medium rounded-lg hover:bg-purple-800 disabled:opacity-40 transition-colors">
-                            {cerrarForm.processing ? 'Cerrando...' : 'Cerrar revisión y enviar a CCA'}
+                            {cerrarForm.processing ? 'Enviando...' : 'Enviar a evaluación'}
                         </button>
                     </div>
                 </form>
+            )}
+
+            {apelacion.estado === 'resuelta' && (
+                <div className="border-t border-gray-100 pt-4 text-xs text-gray-500">
+                    Apelación enviada a evaluación. El expediente está en proceso de re-evaluación.
+                </div>
             )}
         </div>
     );

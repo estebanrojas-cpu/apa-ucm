@@ -1,4 +1,6 @@
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
+
+const MIME_PREVIEWABLE = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
 import { useMemo } from 'react';
 import AppLayout from '@/Layouts/AppLayout';
 
@@ -201,14 +203,18 @@ export default function EvaluarApelacion({
                                                     {evidenciasPorCategoria[cat.id].map(ev => (
                                                         <div key={ev.id} className="flex items-center justify-between gap-2">
                                                             <p className="text-xs text-gray-700 truncate">{ev.nombre_archivo}</p>
-                                                            <a
-                                                                href={ev.url_descarga}
-                                                                target="_blank"
-                                                                rel="noreferrer"
-                                                                className="shrink-0 text-xs text-[#1B2D6B] hover:underline"
-                                                            >
-                                                                Descargar
-                                                            </a>
+                                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                                {MIME_PREVIEWABLE.includes(ev.mime_type) && (
+                                                                    <a href={ev.url_preview} target="_blank" rel="noopener noreferrer"
+                                                                        className="text-xs px-2 py-0.5 rounded bg-[#1B2D6B] text-white hover:bg-[#152558] transition-colors">
+                                                                        Ver
+                                                                    </a>
+                                                                )}
+                                                                <a href={ev.url_descarga} target="_blank" rel="noreferrer"
+                                                                    className="text-xs text-[#0096D6] hover:underline">
+                                                                    Descargar
+                                                                </a>
+                                                            </div>
                                                         </div>
                                                     ))}
                                                 </div>

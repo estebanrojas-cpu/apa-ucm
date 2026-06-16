@@ -2,6 +2,8 @@ import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import { useMemo } from 'react';
 import AppLayout from '@/Layouts/AppLayout';
 
+const MIME_PREVIEWABLE = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+
 const ESTADOS = {
     carga_cerrada: { label: 'Por evaluar',   cls: 'bg-blue-100 text-blue-700' },
     en_evaluacion: { label: 'En evaluación', cls: 'bg-purple-100 text-purple-700' },
@@ -255,7 +257,15 @@ export default function EvaluarExpediente({
                                                 {archivos.map(ev => (
                                                     <li key={ev.id} className="flex items-center gap-2 text-sm">
                                                         <span className="flex-1 truncate text-gray-700">{ev.nombre_archivo}</span>
-                                                        <a href={ev.url_descarga} className="text-xs text-[#0096D6] hover:underline">Descargar</a>
+                                                        <div className="flex items-center gap-1.5 shrink-0">
+                                                            {MIME_PREVIEWABLE.includes(ev.mime_type) && (
+                                                                <a href={ev.url_preview} target="_blank" rel="noopener noreferrer"
+                                                                    className="text-xs px-2 py-0.5 rounded bg-[#1B2D6B] text-white hover:bg-[#152558] transition-colors">
+                                                                    Ver
+                                                                </a>
+                                                            )}
+                                                            <a href={ev.url_descarga} className="text-xs text-[#0096D6] hover:underline">Descargar</a>
+                                                        </div>
                                                     </li>
                                                 ))}
                                             </ul>

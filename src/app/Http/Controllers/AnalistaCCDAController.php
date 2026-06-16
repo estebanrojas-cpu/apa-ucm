@@ -277,7 +277,9 @@ class AnalistaCCDAController extends Controller
                 'tamano'         => $ev->tamanoFormateado(),
                 'descripcion'    => $ev->descripcion,
                 'created_at'     => $ev->created_at->format('d/m/Y H:i'),
-                'url_descarga'   => route('analista.apelaciones.evidencia.download', [$nomina->id, $ev->id]),
+                'url_descarga'   => route('analista.apelaciones.evidencia.download',  [$nomina->id, $ev->id]),
+                'url_preview'    => route('analista.apelaciones.evidencia.preview',   [$nomina->id, $ev->id]),
+                'mime_type'      => $ev->mime_type,
             ];
         }
 
@@ -486,6 +488,19 @@ class AnalistaCCDAController extends Controller
         }
 
         return Storage::disk('public')->download($evidencia->ruta, $evidencia->nombre_archivo);
+    }
+
+    public function previewEvidenciaApelacion(Nomina $nomina, Evidencia $evidencia)
+    {
+        if ($evidencia->nomina_id !== $nomina->id || !$evidencia->es_apelacion) {
+            abort(404);
+        }
+
+        if (!Storage::disk('public')->exists($evidencia->ruta)) {
+            abort(404);
+        }
+
+        return Storage::disk('public')->response($evidencia->ruta, $evidencia->nombre_archivo);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

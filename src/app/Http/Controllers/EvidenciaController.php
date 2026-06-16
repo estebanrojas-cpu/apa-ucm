@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Apelacion;
 use App\Models\CategoriaApa;
+use App\Models\Cronograma;
 use App\Models\Evidencia;
 use App\Models\Nomina;
 use App\Models\Periodo;
@@ -46,43 +48,21 @@ class EvidenciaController extends Controller
 
         $puedeCargar = $nomina && $nomina->cargaEvidenciasHabilitada();
 
-        $evidenciasPorCategoria = [];
-        if ($nomina) {
-            foreach ($nomina->evidenciasNormales as $ev) {
-                $evidenciasPorCategoria[$ev->categoria_id][] = [
-                    'id'             => $ev->id,
-                    'nombre_archivo' => $ev->nombre_archivo,
-                    'tamano'         => $ev->tamanoFormateado(),
-                    'descripcion'    => $ev->descripcion,
-                    'created_at'     => $ev->created_at->format('d/m/Y H:i'),
-                    'url_descarga'   => route('academico.evidencias.download', $ev->id),
-                ];
-            }
-        }
+        $apelacionEtapaVigente = $periodo ? Cronograma::where('periodo_id', $periodo->id)
+            ->where('etapa', 'apelaciones')
+            ->where('fecha_inicio', '<=', now())
+            ->where('fecha_fin', '>=', now())
+            ->exists() : false;
 
         $apelacion = $nomina?->apelacion;
         $puedeCargarApelacion = $nomina
-            && $nomina->estado === 'apelado'
-            && $apelacion
-            && $apelacion->estado === 'en_revision';
-
-        $evidenciasApelacionPorCategoria = [];
-        if ($nomina) {
-            foreach ($nomina->evidenciasApelacion as $ev) {
-                $evidenciasApelacionPorCategoria[$ev->categoria_id][] = [
-                    'id'             => $ev->id,
-                    'nombre_archivo' => $ev->nombre_archivo,
-                    'tamano'         => $ev->tamanoFormateado(),
-                    'descripcion'    => $ev->descripcion,
-                    'created_at'     => $ev->created_at->format('d/m/Y H:i'),
-                    'url_descarga'   => route('academico.evidencias.download', $ev->id),
-                ];
-            }
-        }
+            && in_array($nomina->estado, ['evaluado', 'apelado'])
+            && $apelacionEtapaVigente
+            && (!$apelacion || $apelacion->estado === 'en_revision');
 
         return Inertia::render('Academico/Evidencias', [
-            'periodo'                         => $periodo?->only(['id', 'anio', 'nombre']),
-            'nomina'                          => $nomina ? [
+            'periodo'                => $periodo?->only(['id', 'anio', 'nombre']),
+            'nomina'                 => $nomina ? [
                 'id'                     => $nomina->id,
                 'estado'                 => $nomina->estado,
                 'con_licencia'           => $nomina->con_licencia,
@@ -90,21 +70,26 @@ class EvidenciaController extends Controller
                 'plazo_licencia'         => $nomina->plazo_licencia?->format('Y-m-d'),
                 'observacion_secretario' => $nomina->observacion_secretario,
             ] : null,
-            'plazo'                           => $plazo,
-            'puedeCargar'                     => $puedeCargar,
-            'puedeCargarApelacion'            => $puedeCargarApelacion,
-            'apelacion'                       => $apelacion ? [
+            'plazo'                  => $plazo,
+            'puedeCargar'            => $puedeCargar,
+            'puedeCargarApelacion'   => $puedeCargarApelacion,
+            'apelacionEtapaVigente'  => $apelacionEtapaVigente,
+            'apelacion'              => $apelacion ? [
                 'estado'     => $apelacion->estado,
                 'resolucion' => $apelacion->resolucion,
             ] : null,
-            'categorias'                      => $categorias->map(fn ($c) => [
+            'categorias'             => $categorias->map(fn ($c) => [
                 'id'          => $c->id,
                 'nombre'      => $c->nombre,
                 'slug'        => $c->slug,
                 'descripcion' => $c->descripcion,
             ]),
-            'evidenciasPorCategoria'          => $evidenciasPorCategoria,
-            'evidenciasApelacionPorCategoria' => $evidenciasApelacionPorCategoria,
+            'conteoEvidencias'       => $nomina ? $categorias->mapWithKeys(fn ($c) => [
+                $c->id => [
+                    'normales'   => $nomina->evidenciasNormales->where('categoria_id', $c->id)->count(),
+                    'apelacion'  => $nomina->evidenciasApelacion->where('categoria_id', $c->id)->count(),
+                ],
+            ]) : [],
         ]);
     }
 
@@ -228,17 +213,27 @@ class EvidenciaController extends Controller
             return back()->with('error', 'No hay un período activo.');
         }
 
+        $etapaVigente = Cronograma::where('periodo_id', $periodo->id)
+            ->where('etapa', 'apelaciones')
+            ->where('fecha_inicio', '<=', now())
+            ->where('fecha_fin', '>=', now())
+            ->exists();
+
+        if (!$etapaVigente) {
+            return back()->with('error', 'El plazo de apelaciones no está vigente.');
+        }
+
         $nomina = Nomina::where('periodo_id', $periodo->id)
             ->where('user_id', $user->id)
             ->first();
 
-        if (!$nomina || $nomina->estado !== 'apelado') {
+        if (!$nomina || !in_array($nomina->estado, ['evaluado', 'apelado'])) {
             return back()->with('error', 'No puede cargar evidencias de apelación en este momento.');
         }
 
         $apelacion = $nomina->apelacion;
-        if (!$apelacion || $apelacion->estado !== 'en_revision') {
-            return back()->with('error', 'Su apelación no está aprobada para carga de evidencias.');
+        if ($apelacion && $apelacion->estado === 'resuelta') {
+            return back()->with('error', 'La apelación ya fue resuelta. No puede agregar más evidencias.');
         }
 
         $data = $request->validate([
@@ -252,6 +247,17 @@ class EvidenciaController extends Controller
             'archivo.max'           => 'El archivo no puede superar los 10 MB.',
             'archivo.mimes'         => 'Solo se permiten archivos PDF, Word e imágenes (JPG, PNG).',
         ]);
+
+        // Auto-create apelación si es la primera evidencia de apelación
+        if (!$apelacion) {
+            Apelacion::create([
+                'nomina_id'       => $nomina->id,
+                'motivo'          => 'Apelación presentada mediante evidencias adicionales.',
+                'estado'          => 'en_revision',
+                'fecha_solicitud' => now()->toDateString(),
+            ]);
+            $nomina->update(['estado' => 'apelado']);
+        }
 
         $archivo = $request->file('archivo');
         $ruta    = $archivo->store("evidencias/{$nomina->id}/apelacion", 'public');
@@ -283,5 +289,89 @@ class EvidenciaController extends Controller
         $evidencia->delete();
 
         return back()->with('success', 'Evidencia de apelación eliminada.');
+    }
+
+    public function preview(Evidencia $evidencia)
+    {
+        $user = auth()->user();
+
+        if ($evidencia->nomina->user_id !== $user->id) {
+            abort(403);
+        }
+
+        if (!Storage::disk('public')->exists($evidencia->ruta)) {
+            abort(404);
+        }
+
+        return Storage::disk('public')->response($evidencia->ruta, $evidencia->nombre_archivo);
+    }
+
+    public function showCategoria(CategoriaApa $categoria): Response
+    {
+        $user    = auth()->user();
+        $periodo = Periodo::where('estado', 'activo')->latest()->first();
+
+        if (!$periodo) {
+            return redirect()->route('academico.evidencias');
+        }
+
+        $nomina = Nomina::with([
+            'evidenciasNormales.categoria',
+            'evidenciasApelacion.categoria',
+            'apelacion',
+        ])
+            ->where('periodo_id', $periodo->id)
+            ->where('user_id', $user->id)
+            ->first();
+
+        if (!$nomina) {
+            return redirect()->route('academico.evidencias');
+        }
+
+        $plazoModel = PlazoFacultad::where('periodo_id', $periodo->id)
+            ->where('facultad_id', $user->facultad_id)
+            ->first();
+
+        $puedeCargar = $nomina->cargaEvidenciasHabilitada();
+
+        $apelacionEtapaVigente = Cronograma::where('periodo_id', $periodo->id)
+            ->where('etapa', 'apelaciones')
+            ->where('fecha_inicio', '<=', now())
+            ->where('fecha_fin', '>=', now())
+            ->exists();
+
+        $apelacion = $nomina->apelacion;
+        $puedeCargarApelacion = in_array($nomina->estado, ['evaluado', 'apelado'])
+            && $apelacionEtapaVigente
+            && (!$apelacion || $apelacion->estado === 'en_revision');
+
+        $mapEv = fn ($ev) => [
+            'id'             => $ev->id,
+            'nombre_archivo' => $ev->nombre_archivo,
+            'tamano'         => $ev->tamanoFormateado(),
+            'descripcion'    => $ev->descripcion,
+            'mime_type'      => $ev->mime_type,
+            'created_at'     => $ev->created_at->format('d/m/Y H:i'),
+            'url_descarga'   => route('academico.evidencias.download',  $ev->id),
+            'url_preview'    => route('academico.evidencias.preview',    $ev->id),
+        ];
+
+        return Inertia::render('Academico/EvidenciaCategoria', [
+            'periodo'              => $periodo->only(['id', 'nombre']),
+            'categoria'            => [
+                'id'          => $categoria->id,
+                'nombre'      => $categoria->nombre,
+                'descripcion' => $categoria->descripcion,
+            ],
+            'evidenciasNormales'   => $nomina->evidenciasNormales
+                ->where('categoria_id', $categoria->id)
+                ->values()->map($mapEv),
+            'evidenciasApelacion'  => $nomina->evidenciasApelacion
+                ->where('categoria_id', $categoria->id)
+                ->values()->map($mapEv),
+            'puedeCargar'          => $puedeCargar,
+            'puedeCargarApelacion' => $puedeCargarApelacion,
+            'nominaEstado'         => $nomina->estado,
+        ]);
     }
 }

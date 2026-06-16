@@ -148,22 +148,30 @@ class DashboardController extends Controller
                 ->where('user_id', $user->id)
                 ->first();
 
+            $apelacionesAbiertas = Cronograma::where('periodo_id', $periodo->id)
+                ->where('etapa', 'apelaciones')
+                ->where('fecha_inicio', '<=', now())
+                ->where('fecha_fin', '>=', now())
+                ->exists();
+
             if ($nomina) {
                 $cf = $nomina->calificacionFinal;
                 $ap = $nomina->apelacion;
                 $stats = [
-                    'evidencias_cargadas' => $nomina->evidenciasNormales->count(),
-                    'estado_nomina'       => $nomina->estado,
-                    'calificacion'        => $cf ? [
+                    'evidencias_cargadas'  => $nomina->evidenciasNormales->count(),
+                    'estado_nomina'        => $nomina->estado,
+                    'apelaciones_abiertas' => $apelacionesAbiertas,
+                    'calificacion'         => $cf ? [
                         'puntaje_total' => $cf->puntaje_total,
                         'calificacion'  => $cf->calificacion,
                         'label'         => $cf->calificacionLabel(),
                         'fecha'         => $cf->fecha->format('d/m/Y'),
                     ] : null,
-                    'apelacion'           => $ap ? [
+                    'apelacion'            => $ap ? [
                         'estado'    => $ap->estado,
                         'motivo'    => $ap->motivo,
                         'resolucion'=> $ap->resolucion,
+                        'destino'   => $ap->destino,
                     ] : null,
                 ];
             }
