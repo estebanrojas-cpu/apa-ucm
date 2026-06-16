@@ -73,16 +73,26 @@ class PeriodoController extends Controller
     {
         $orden = array_flip(Cronograma::ETAPAS);
 
-        $cronogramas = $periodo->cronogramas()
+        $coleccion = $periodo->cronogramas()
             ->get()
-            ->sortBy(fn ($c) => $orden[$c->etapa] ?? 99)
-            ->map(fn ($c) => [
-                'etapa'        => Cronograma::etiqueta($c->etapa),
-                'fecha_inicio' => $c->fecha_inicio->format('d/m/Y'),
-                'fecha_fin'    => $c->fecha_fin->format('d/m/Y'),
-                'vigente'      => $c->estaVigente(),
-                'terminado'    => $c->haTerminado(),
-            ]);
+            ->sortBy(fn ($c) => $orden[$c->etapa] ?? 99);
+
+        // Entre las etapas secuenciales, solo la primera (por orden) que esté
+        // dentro de su rango de fechas es realmente vigente.
+        $paralelas = Cronograma::ETAPAS_PARALELAS;
+        $primeraSecuencialVigente = $coleccion
+            ->filter(fn ($c) => !in_array($c->etapa, $paralelas) && $c->estaVigente())
+            ->first();
+
+        $cronogramas = $coleccion->map(fn ($c) => [
+            'etapa'        => Cronograma::etiqueta($c->etapa),
+            'fecha_inicio' => $c->fecha_inicio->format('d/m/Y'),
+            'fecha_fin'    => $c->fecha_fin->format('d/m/Y'),
+            'vigente'      => in_array($c->etapa, $paralelas)
+                ? $c->estaVigente()
+                : ($primeraSecuencialVigente?->id === $c->id),
+            'terminado'    => $c->haTerminado(),
+        ]);
 
         return view('cronograma.imprimir', compact('periodo', 'cronogramas'));
     }

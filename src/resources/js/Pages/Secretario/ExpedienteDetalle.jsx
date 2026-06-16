@@ -98,58 +98,39 @@ export default function ExpedienteDetalle({ nomina, categorias, evidenciasPorCat
                     )}
                 </div>
 
-                {/* Evidencias por categoría */}
+                {/* Evidencias por categoría — cards navegables */}
                 <h2 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
                     Documentación entregada por categoría
                 </h2>
-                <div className="space-y-3 mb-8">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8">
                     {categorias.map(cat => {
-                        const archivos = evidenciasPorCategoria[cat.id] ?? [];
+                        const normales  = (evidenciasPorCategoria[cat.id] ?? []).length;
+                        const apelacion = (evidenciasApelacionPorCategoria[cat.id] ?? []).length;
                         return (
-                            <div key={cat.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-                                <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
-                                    <span className="text-sm font-semibold text-gray-700">{cat.nombre}</span>
-                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                                        archivos.length > 0
-                                            ? 'bg-green-100 text-green-700'
-                                            : 'bg-gray-100 text-gray-500'
-                                    }`}>
-                                        {archivos.length > 0 ? `${archivos.length} archivo${archivos.length > 1 ? 's' : ''}` : 'Sin archivos'}
-                                    </span>
+                            <Link
+                                key={cat.id}
+                                href={`/secretario/expedientes/${nomina.id}/categoria/${cat.id}`}
+                                className="bg-white rounded-xl border border-gray-200 p-4 hover:border-[#1B2D6B] hover:shadow-sm transition-all group"
+                            >
+                                <div className="flex items-center justify-between mb-2">
+                                    <h3 className="font-semibold text-gray-800 text-sm group-hover:text-[#1B2D6B] transition-colors">
+                                        {cat.nombre}
+                                    </h3>
+                                    <span className="text-[#1B2D6B] text-sm font-bold shrink-0">→</span>
                                 </div>
-                                <div className="px-5 py-3">
-                                    {archivos.length === 0 ? (
-                                        <p className="text-xs text-gray-400 italic">El académico no ha cargado archivos en esta categoría.</p>
-                                    ) : (
-                                        <ul className="space-y-2">
-                                            {archivos.map(ev => (
-                                                <li key={ev.id} className="flex items-center gap-2.5 py-1.5 text-sm">
-                                                    <FileIcon />
-                                                    <div className="min-w-0 flex-1">
-                                                        <p className="text-gray-800 font-medium truncate">{ev.nombre_archivo}</p>
-                                                        <p className="text-xs text-gray-400">
-                                                            {ev.tamano} · {ev.created_at}
-                                                            {ev.descripcion && ` · ${ev.descripcion}`}
-                                                        </p>
-                                                    </div>
-                                                    <div className="flex items-center gap-1.5 shrink-0">
-                                                        {MIME_PREVIEWABLE.includes(ev.mime_type) && (
-                                                            <a href={ev.url_preview} target="_blank" rel="noopener noreferrer"
-                                                                className="text-xs px-2.5 py-1 rounded-lg bg-[#1B2D6B] text-white hover:bg-[#152558] transition-colors">
-                                                                Ver
-                                                            </a>
-                                                        )}
-                                                        <a href={ev.url_descarga} download
-                                                            className="shrink-0 text-xs text-[#0096D6] hover:underline flex items-center gap-1">
-                                                            <DownloadIcon /> Descargar
-                                                        </a>
-                                                    </div>
-                                                </li>
-                                            ))}
-                                        </ul>
+                                <div className="flex items-center gap-2">
+                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                        normales > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                                    }`}>
+                                        {normales} {normales === 1 ? 'archivo' : 'archivos'}
+                                    </span>
+                                    {apelacion > 0 && (
+                                        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                                            +{apelacion} apelación
+                                        </span>
                                     )}
                                 </div>
-                            </div>
+                            </Link>
                         );
                     })}
                 </div>
@@ -281,7 +262,8 @@ export default function ExpedienteDetalle({ nomina, categorias, evidenciasPorCat
                     <ApelacionPanel
                         apelacion={apelacion}
                         nominaId={nomina.id}
-                        evidenciasApelacion={Object.values(evidenciasApelacionPorCategoria ?? {}).flat()}
+                        categorias={categorias}
+                        evidenciasApelacionPorCategoria={evidenciasApelacionPorCategoria ?? {}}
                     />
                 )}
 
@@ -399,9 +381,7 @@ function LicenciaPanel({ nomina }) {
     );
 }
 
-const MIME_PREVIEWABLE = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-
-function ApelacionPanel({ apelacion, nominaId, evidenciasApelacion = [] }) {
+function ApelacionPanel({ apelacion, nominaId, categorias = [], evidenciasApelacionPorCategoria = {} }) {
     const cerrarForm = useForm({});
 
     function submitCerrar(e) {
@@ -416,44 +396,21 @@ function ApelacionPanel({ apelacion, nominaId, evidenciasApelacion = [] }) {
     };
 
     const badge = estadoApelacion[apelacion.estado] ?? { label: apelacion.estado, cls: 'bg-gray-100 text-gray-600' };
+    const totalEvidencias = Object.values(evidenciasApelacionPorCategoria).reduce((sum, arr) => sum + arr.length, 0);
 
     return (
         <div className="mt-6 bg-white border border-orange-200 rounded-xl p-5">
-            <div className="flex items-center gap-3 mb-4">
-                <h2 className="text-sm font-semibold text-gray-800">Apelación del académico</h2>
-                <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                    <h2 className="text-sm font-semibold text-gray-800">Apelación del académico</h2>
+                    <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${badge.cls}`}>{badge.label}</span>
+                </div>
+                {totalEvidencias > 0 && (
+                    <span className="text-xs text-gray-400">
+                        {totalEvidencias} {totalEvidencias === 1 ? 'evidencia adjunta' : 'evidencias adjuntas'} — revísalas en cada carpeta
+                    </span>
+                )}
             </div>
-
-            {/* Evidencias de apelación */}
-            {evidenciasApelacion.length > 0 ? (
-                <div className="mb-4">
-                    <p className="text-xs font-medium text-gray-500 mb-2">Evidencias adjuntadas ({evidenciasApelacion.length})</p>
-                    <ul className="space-y-2">
-                        {evidenciasApelacion.map(ev => (
-                            <li key={ev.id} className="flex items-center gap-3 bg-gray-50 rounded-lg px-4 py-2.5 text-sm">
-                                <span className="flex-1 text-gray-800 truncate font-medium">{ev.nombre_archivo}</span>
-                                <span className="text-xs text-gray-400 shrink-0">{ev.tamano}</span>
-                                <div className="flex items-center gap-1.5 shrink-0">
-                                    {MIME_PREVIEWABLE.includes(ev.mime_type) && (
-                                        <a href={ev.url_preview} target="_blank" rel="noopener noreferrer"
-                                            className="text-xs px-2.5 py-1 rounded-lg bg-[#1B2D6B] text-white hover:bg-[#152558] transition-colors">
-                                            Ver
-                                        </a>
-                                    )}
-                                    <a href={ev.url_descarga} download
-                                        className="text-xs px-2.5 py-1 rounded-lg bg-gray-200 text-gray-700 hover:bg-gray-300 transition-colors">
-                                        Descargar
-                                    </a>
-                                </div>
-                            </li>
-                        ))}
-                    </ul>
-                </div>
-            ) : (
-                <div className="mb-4 text-sm text-gray-400 italic">
-                    El académico aún no ha adjuntado evidencias de apelación.
-                </div>
-            )}
 
             {/* Enviar a evaluación */}
             {apelacion.estado === 'en_revision' && (
@@ -480,15 +437,6 @@ function ApelacionPanel({ apelacion, nominaId, evidenciasApelacion = [] }) {
     );
 }
 
-function FileIcon() {
-    return (
-        <svg className="w-4 h-4 text-[#0096D6] shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
-        </svg>
-    );
-}
-
 function BackIcon() {
     return (
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -504,3 +452,4 @@ function DownloadIcon() {
         </svg>
     );
 }
+

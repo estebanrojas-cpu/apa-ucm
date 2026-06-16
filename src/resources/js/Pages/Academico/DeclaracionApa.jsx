@@ -48,8 +48,8 @@ export default function DeclaracionApa({
     periodo, nomina, semestre, semestreLabel, yaDeclarado, fechaCierre, datos, config,
 }) {
     const { flash }  = usePage().props;
-    const decimales  = config?.decimales_pct      ?? 2;
-    const horasBase  = config?.horas_semestre_base ?? 40;
+    const decimales      = config?.decimales_pct  ?? 2;
+    const horasContrato  = config?.horas_contrato ?? 0;
 
     const form = useForm({
         semestre,
@@ -68,8 +68,8 @@ export default function DeclaracionApa({
         };
     }, [form.data, decimales]);
 
-    const tieneHoras         = totalHras > 0;
-    const mostrarAdvertencia = tieneHoras && Math.abs(totalHras - horasBase) > 0.01;
+    const tieneHoras      = totalHras > 0;
+    const horasIncorrectas = horasContrato > 0 && tieneHoras && Math.abs(totalHras - horasContrato) > 0.01;
 
     function submit(e) {
         e.preventDefault();
@@ -122,7 +122,9 @@ export default function DeclaracionApa({
                             {semestreLabel}
                         </h2>
                         <p className="text-sm text-gray-500 mt-1">
-                            Ingresa las horas dedicadas a cada área. El porcentaje se calcula automáticamente.
+                            Ingresa las horas dedicadas a cada área. El total debe ser exactamente{' '}
+                            <span className="font-semibold text-gray-700">{horasContrato} h</span>{' '}
+                            según tu contrato. El porcentaje se calcula automáticamente.
                         </p>
 
                         {yaDeclarado ? (
@@ -164,27 +166,28 @@ export default function DeclaracionApa({
 
                                 {/* ── Resumen total ───────────────────────────── */}
                                 <div className={`rounded-lg px-4 py-3 text-sm ${
-                                    tieneHoras
-                                        ? 'bg-blue-50 text-blue-800 border border-blue-200'
-                                        : 'bg-gray-50 text-gray-400 border border-gray-200'
+                                    !tieneHoras
+                                        ? 'bg-gray-50 text-gray-400 border border-gray-200'
+                                        : horasIncorrectas
+                                            ? 'bg-red-50 text-red-800 border border-red-200'
+                                            : 'bg-blue-50 text-blue-800 border border-blue-200'
                                 }`}>
                                     <div className="flex justify-between font-medium">
                                         <span>Total horas declaradas</span>
                                         <span className="tabular-nums">{totalHras.toFixed(1)} h</span>
                                     </div>
-                                    {tieneHoras && (
+                                    {tieneHoras && horasContrato > 0 && (
                                         <p className="text-xs mt-0.5 opacity-70">
-                                            Los porcentajes suman 100% y se calculan automáticamente.
+                                            Requerido: {horasContrato} h según contrato
                                         </p>
                                     )}
                                 </div>
 
-                                {/* ── Advertencia de coherencia (no bloquea) ─── */}
-                                {mostrarAdvertencia && (
-                                    <div className="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-                                        Las horas declaradas ({totalHras.toFixed(1)} h) difieren de la base
-                                        esperada ({horasBase} h/semestre). Verifique con su director de departamento
-                                        antes de confirmar.
+                                {/* ── Error bloqueante: horas no coinciden con contrato ── */}
+                                {horasIncorrectas && (
+                                    <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+                                        El total declarado ({totalHras.toFixed(1)} h) no coincide con las horas
+                                        de contrato del semestre ({horasContrato} h). Ajusta los valores para poder confirmar.
                                     </div>
                                 )}
 
@@ -221,7 +224,7 @@ export default function DeclaracionApa({
 
                                 <button
                                     type="submit"
-                                    disabled={form.processing || !tieneHoras}
+                                    disabled={form.processing || !tieneHoras || horasIncorrectas}
                                     className="w-full bg-[#1B2D6B] text-white text-sm font-medium py-2.5 rounded-lg hover:bg-[#152558] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                                 >
                                     {form.processing ? 'Confirmando...' : `Confirmar ${semestreLabel}`}

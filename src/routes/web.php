@@ -49,6 +49,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/periodos/{periodo}/nominas/preview-excel',  [NominaController::class, 'previewExcel'])->name('analista.periodos.nominas.preview-excel');
         Route::post('/periodos/{periodo}/nominas/importar-excel', [NominaController::class, 'importarExcel'])->name('analista.periodos.nominas.importar-excel');
         Route::post('/periodos/{periodo}/nominas/agregar',        [NominaController::class, 'agregarIndividual'])->name('analista.periodos.nominas.agregar');
+        Route::post('/periodos/{periodo}/nominas/enviar-credenciales', [NominaController::class, 'enviarCredenciales'])->name('analista.periodos.nominas.enviar-credenciales');
         Route::post('/periodos/{periodo}/nominas/columna',        [NominaController::class, 'agregarColumna'])->name('analista.periodos.nominas.columna');
         Route::delete('/periodos/{periodo}/nominas/columna',      [NominaController::class, 'eliminarColumna'])->name('analista.periodos.nominas.columna.destroy');
         Route::patch('/periodos/{periodo}/nominas/{nomina}',      [NominaController::class, 'update'])->name('analista.periodos.nominas.update');
@@ -82,6 +83,7 @@ Route::middleware('auth')->group(function () {
         Route::patch('/expedientes/{nomina}/validar',                        [SecretarioController::class, 'validarExpediente'])->name('secretario.expedientes.validar');
         Route::patch('/expedientes/{nomina}/reabrir',                        [SecretarioController::class, 'reabrirExpediente'])->name('secretario.expedientes.reabrir');
         Route::post('/expedientes/{nomina}/licencia-plazo',                  [SecretarioController::class, 'setPlazolicencia'])->name('secretario.expedientes.licencia-plazo');
+        Route::get('/expedientes/{nomina}/categoria/{categoria}',               [SecretarioController::class, 'showCategoria'])->name('secretario.expedientes.categoria');
         Route::get('/expedientes/{nomina}/evidencias/{evidencia}/descargar',      [SecretarioController::class, 'downloadEvidencia'])->name('secretario.evidencias.download');
         Route::get('/expedientes/{nomina}/evidencias/{evidencia}/previsualizar', [SecretarioController::class, 'previewEvidencia'])->name('secretario.evidencias.preview');
         Route::patch('/apelaciones/{apelacion}/resolver',                    [ApelacionController::class,  'resolver'])->name('secretario.apelaciones.resolver');

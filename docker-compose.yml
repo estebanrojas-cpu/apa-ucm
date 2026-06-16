@@ -31,6 +31,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      mailpit:
+        condition: service_started
 
   # ─── Nginx ──────────────────────────────────────────────────────────────────
   nginx:
@@ -93,6 +95,17 @@ services:
       - apa_network
     depends_on:
       - app
+
+  # ─── Mailpit (captura de correos en desarrollo) ─────────────────────────────
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: apa_mailpit
+    restart: unless-stopped
+    ports:
+      - "8025:8025"   # UI web para revisar correos
+      - "1025:1025"   # SMTP
+    networks:
+      - apa_network
 
   # ─── Queue Worker (Laravel) ─────────────────────────────────────────────────
   queue:

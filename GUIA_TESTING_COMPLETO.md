@@ -1,260 +1,560 @@
-# 🧪 Guía de Testing Completo — Sistema APA UCM
+# Guía de Testing Completo — Sistema APA UCM
 
 > **Versión:** 2026-1 | **Última actualización:** Junio 2026
 
 ---
 
-## 📋 Tabla de Contenidos
+## Tabla de Contenidos
 
-1. [Setup Inicial](#-1-setup-inicial)
-2. [Usuarios de Prueba](#-2-usuarios-de-prueba)
-3. [Flujo Completo de Testing](#-3-flujo-completo-de-testing)
-4. [Casos Especiales](#-4-casos-especiales)
-5. [Troubleshooting](#-5-troubleshooting)
+1. [Setup Inicial](#1-setup-inicial)
+2. [Usuarios de Prueba](#2-usuarios-de-prueba)
+3. [Flujo Completo End-to-End](#3-flujo-completo-end-to-end)
+   - [Fase 0 — Admin + Analista (configura desde cero)](#fase-0--admin--analista-configura-desde-cero)
+   - [Etapa 1 — Carga de evidencias, Jefatura y Validación](#etapa-1--carga-de-evidencias-jefatura-y-validación)
+   - [Etapa 2 — Evaluación CCA](#etapa-2--evaluación-cca)
+   - [Etapa 3 — Apelaciones, Cierre y Vicerrectora](#etapa-3--apelaciones-cierre-y-vicerrectora)
+4. [Reportes CCDA](#4-reportes-ccda)
+5. [Casos Borde](#5-casos-borde)
+6. [Mensajes Flash a Verificar](#6-mensajes-flash-a-verificar)
+7. [Troubleshooting](#7-troubleshooting)
+8. [Checklist Final](#8-checklist-final)
 
 ---
 
-## 🚀 1. SETUP INICIAL
+## 1. Setup Inicial
 
-### 1.1 Levantar el sistema
+### Opción A — Reset completo (estado inicial limpio, sin período)
 
 ```bash
-cd /Users/tban/Documents/apa-ucm
-
-# Levantar contenedores Docker
+# Levantar contenedores
 docker compose up -d
 
-# Esperar 10 segundos para que PostgreSQL esté listo
-sleep 10
+# Solo estructura base: facultades + categorías APA + usuarios de prueba
+docker compose exec app php artisan migrate:fresh
+docker compose exec app php artisan db:seed --class=FacultadesSeeder
+docker compose exec app php artisan db:seed --class=CategoriasApaSeeder
+docker compose exec app php artisan db:seed --class=UsuariosPruebaSeeder
+```
 
-# Reset completo de BD + seeders
+Usar cuando quieras probar la Fase 0 completa (el analista crea el período desde cero).
+
+### Opción B — Reset con datos demo (período + nóminas precargadas)
+
+```bash
 docker compose exec app php artisan migrate:fresh --seed
 ```
 
-### 1.2 Verificar que todo está OK
+Crea: período activo 2026-1, cronograma 8 etapas, 6 académicos FCI + 2 FCAF,
+compromisos APA confirmados para `academico@ucm.cl`, evidencias demo.
+
+### Verificar que todo está OK
 
 ```bash
-# Verificar migraciones
 docker compose exec app php artisan migrate:status
-
-# Verificar usuarios creados
 docker compose exec app php artisan tinker --execute="echo App\Models\User::count();"
 ```
-
-### 1.3 Acceder al sistema
 
 - **URL:** http://localhost:8080
 - **Password universal:** `password`
 
 ---
 
-## 👥 2. USUARIOS DE PRUEBA
+## 2. Usuarios de Prueba
 
-| Email | Rol | Facultad | Estado Inicial |
-|-------|-----|----------|----------------|
-| `admin@ucm.cl` | Admin | — | Configura semestres |
-| `analista@ucm.cl` | Analista CCDA | — | Gestiona nóminas y reportes |
-| `secretario@ucm.cl` | Secretario | FCI | Valida expedientes |
-| `cca@ucm.cl` | Miembro CCA | FCI | Evalúa académicos |
-| `jefe@ucm.cl` | Jefe Académico | FCI | Emite informes |
-| `vicerrectora@ucm.cl` | Vicerrectora | — | Revisión final |
-| `academico@ucm.cl` | Académico | FCI | **S1 y S2 ya declarados** |
-| `secretario.fcaf@ucm.cl` | Secretario | FCAF | Valida FCAF |
-| `cca.fcaf@ucm.cl` | Miembro CCA | FCAF | Evalúa FCAF |
+| Email | Rol | Facultad | Notas |
+|---|---|---|---|
+| `admin@ucm.cl` | Admin | — | Configura semestres S1/S2 |
+| `analista@ucm.cl` | Analista CCDA | — | Crea períodos, carga nóminas, reportes |
+| `secretario@ucm.cl` | Secretario | FCI | Solo ve expedientes FCI |
+| `cca@ucm.cl` | Miembro CCA | FCI | Evalúa académicos FCI |
+| `jefe@ucm.cl` | Jefe Académico | FCI | Emite informes FCI |
+| `vicerrectora@ucm.cl` | Vicerrectora | — | Solo lectura global |
+| `academico@ucm.cl` | Académico | FCI (adjunto) | S1 y S2 declarados en demo |
+| `secretario.fcaf@ucm.cl` | Secretario | FCAF | Solo ve expedientes FCAF |
+| `cca.fcaf@ucm.cl` | Miembro CCA | FCAF | Evalúa académicos FCAF |
 | `jefe.fcaf@ucm.cl` | Jefe Académico | FCAF | Informes FCAF |
-| `academico.fcaf@ucm.cl` | Académico | FCAF | **Solo S1 declarado, debe declarar S2** |
+| `academico.fcaf@ucm.cl` | Académico | FCAF (titular) | Solo S1 declarado en demo |
 
 ---
 
-## 🔄 3. FLUJO COMPLETO DE TESTING
-
-### 📍 **PARTE A: Admin — Configuración de Semestres**
-
-#### Test A.1: Verificar configuración inicial
-1. Login: `admin@ucm.cl` / `password`
-2. En el dashboard, click en **"Configuración de Semestres"**
-3. **Verificar:**
-   - ✅ Se muestran 2 fechas precargadas (S1 y S2)
-   - ✅ Fecha S1 está antes de Fecha S2
-4. **Opcional:** Modificar las fechas y guardar
+## 3. Flujo Completo End-to-End
 
 ---
 
-### 📍 **PARTE B: Analista CCDA — Gestión de Nómina**
+### Fase 0 — Admin + Analista (configura desde cero)
 
-#### Test B.1: Visualizar nómina del período
-1. Logout y login: `analista@ucm.cl`
-2. Click en **"Períodos"**
-3. Entrar al período activo (2026-1)
-4. Click en **"Gestionar"** o **"Nómina"**
-5. **Verificar:**
-   - ✅ Ves 8 académicos cargados (6 FCI + 2 FCAF)
-   - ✅ NO existe botón "Exportar Excelentes"
-   - ✅ NO hay botones "+ Caso" o "Quitar caso"
-   - ✅ Académicos con licencia médica muestran badge "especial"
+> Usar con **Opción A** del setup. Si usaste Opción B, el período ya existe — saltar a Etapa 1.
 
-#### Test B.2: Importar nómina desde CSV
-1. En el panel lateral **"Importar Excel SAPD"**
-2. Click en **"Seleccionar archivo"**
-3. Seleccionar: `/Users/tban/Documents/apa-ucm/nomina_academicos_vigencia_realista.csv`
-4. Click en **"Cargar"**
-5. **Verificar:**
-   - ✅ Se detectan ~12-14 campos automáticamente
-   - ✅ "Categoría 2026" y "Fecha Categoría 2026" se mapean como campos principales
-6. Click en **"Importar nómina"**
-7. **Verificar:**
-   - ✅ Se importan 20 académicos nuevos
-   - ✅ Total nómina: 28 académicos (8 originales + 20 nuevos)
+#### T-00: Admin configura semestres académicos
 
-#### Test B.3: Verificar coherencia de vigencias
-1. Buscar académico **"Juan Carlos Pérez Muñoz"** en la lista
-2. Click en el nombre para ver detalle
-3. **Verificar:**
-   - ✅ Categoría: **Titular**
-   - ✅ Fecha Categorización: **15/03/2024**
-   - ✅ Vencimiento: **15/03/2026** (NO 15/03/2024) ❌ Vencida
-   - ✅ Historial muestra: 2020 (Adjunto), 2023 (Adjunto), 2026 (Titular)
-
-4. Buscar **"Pedro Antonio Silva Lagos"** (Auxiliar)
-5. **Verificar:**
-   - ✅ Categoría: **Auxiliar**
-   - ✅ Fecha Categorización: **15/05/2025**
-   - ✅ Vencimiento: **15/05/2026** (1 año después) ❌ Vencida
-
-#### Test B.4: Reporte Consolidado con columnas personalizadas
-1. Volver al menú lateral, click en **"Reporte de Calificaciones"**
-2. **Verificar:**
-   - ✅ Se muestra el reporte agrupado por facultad
-   - ✅ Aparece nuevo botón azul: **"+ Agregar columna manual"**
-3. Click en **"+ Agregar columna manual"**
-4. Agregar 2 columnas:
-   - "Observaciones"
-   - "Fecha revisión"
-5. **Verificar:**
-   - ✅ Las columnas aparecen al final de la tabla
-   - ✅ Los campos son editables (click para escribir)
-6. Escribir datos en algunos campos
-7. Click en **"Imprimir / Guardar como PDF"**
-8. **Verificar:**
-   - ✅ El PDF incluye las columnas personalizadas con sus datos
+- Login: `admin@ucm.cl`
+- URL: `/admin/configuracion-semestres`
+- **Pasos:** Fijar fecha de cierre S1 y S2 del año → guardar
+- **Verificar:**
+  - [ ] Se muestran 2 fechas configurables (S1 y S2)
+  - [ ] Fecha S1 < Fecha S2
+  - [ ] Mensaje de éxito al guardar
 
 ---
 
-### 📍 **PARTE C: Académico — Declaración APA Secuencial**
+#### T-01: Analista crea período y cronograma de 8 etapas
 
-#### Test C.1: Académico con S1 y S2 ya declarados (puede cargar evidencias)
-1. Logout y login: `academico@ucm.cl` / `password`
-2. **Verificar:**
-   - ✅ Va directo al dashboard (no redirige a declaración)
-3. Click en **"Cargar Evidencias"**
-4. **Verificar:**
-   - ✅ Puede acceder normalmente
-   - ✅ Ve sus porcentajes declarados S1 y S2
-   - ✅ Puede subir evidencias en cada área APA
+- Login: `analista@ucm.cl`
+- URL: `/analista/periodos/crear`
+- **Pasos:**
+  1. Completar nombre (`2026-1 - Calificación APA 2025`), año, fecha inicio y cierre
+  2. Definir fechas para las **8 etapas** del cronograma:
 
-#### Test C.2: Académico que debe declarar S2 (FCAF)
-1. Logout y login: `academico.fcaf@ucm.cl` / `password`
-2. **Verificar:**
-   - ✅ Es redirigido automáticamente a `/academico/declaracion-apa/S2`
-   - ✅ Mensaje indica que debe declarar S2 antes de continuar
-3. **Llenar el formulario S2:**
-   - Docencia: `40`
-   - Investigación: `30`
-   - Extensión: `20`
-   - Administración: `10`
-   - **Total: 100%** ✓
-4. **Verificar:**
-   - ✅ El contador suma 100% en verde
-   - ✅ Botón "Confirmar" se habilita
-5. Click en **"Confirmar Declaración"**
-6. **Verificar:**
-   - ✅ Mensaje de éxito
-   - ✅ Redirige a Carga de Evidencias
+     | Etapa | Tipo | Descripción |
+     |---|---|---|
+     | `carga_evidencias` | Paralela | Académico declara APA y sube evidencias |
+     | `validacion_secretario` | Paralela | Secretario valida a medida que llegan |
+     | `informe_jefatura` | Paralela | Jefe emite informe |
+     | `evaluacion_cca` | Secuencial | Inicia al cerrar las 3 anteriores |
+     | `comunicacion_resultados` | Secuencial | — |
+     | `apelaciones` | Secuencial | — |
+     | `registro_ccda` | Secuencial | — |
+     | `revision_vicerrectoria` | Secuencial | Al cerrar → período pasa a "cerrado" |
 
-#### Test C.3: Validaciones de declaración
-1. Sin guardar, escribir porcentajes que NO sumen 100% (ej: 50+30+10+5)
-2. **Verificar:**
-   - ✅ Botón "Confirmar" deshabilitado
-   - ✅ Indicador muestra suma actual y advertencia
+  3. Guardar
+- **Verificar:**
+  - [ ] Período creado con estado `activo` en `/analista/periodos`
+  - [ ] Cronograma con las 8 etapas visible
+  - [ ] PDF del cronograma descargable (`/analista/periodos/{id}/cronograma/pdf`)
 
 ---
 
-### 📍 **PARTE D: Secretario — Validación de Expedientes**
+#### T-02: Analista descarga plantilla de nómina
 
-#### Test D.1: Validar expediente
-1. Logout y login: `secretario@ucm.cl` / `password`
-2. Click en **"Expedientes"**
-3. **Verificar:**
-   - ✅ Ve solo académicos de FCI (no FCAF)
-4. Click en el expediente de `Académico Prueba`
-5. **Verificar:**
-   - ✅ Ve compromisos APA (S1 y S2)
-   - ✅ Ve evidencias cargadas
-6. Click en **"Validar expediente"**
-7. **Verificar:**
-   - ✅ Estado cambia a "validado"
+- URL: `/analista/nominas/plantilla`
+- **Verificar:**
+  - [ ] Descarga `plantilla_nomina_ucm.xlsx` con columnas SAPD vacías (RUT, nombre, apellidos, facultad, categoría, horas contrato I/II sem, etc.)
 
 ---
 
-### 📍 **PARTE E: Jefe Académico — Informe**
+#### T-03: Analista carga nómina vía Excel SAPD
 
-#### Test E.1: Emitir informe
-1. Logout y login: `jefe@ucm.cl` / `password`
-2. Click en **"Académicos"**
-3. Click en el académico validado
-4. Llenar informe:
-   - Comentario detallado
-   - Sugerencia: "Muy Bueno"
-5. Click en **"Enviar informe"**
-6. **Verificar:**
-   - ✅ Informe guardado
-   - ✅ Expediente pasa a evaluación CCA
+- URL: `/analista/periodos/{periodo}/nominas/crear`
+- **Pasos:**
+  1. Panel izquierdo **"Importar Excel SAPD"** → seleccionar archivo `.xlsx`
+  2. Click **"Cargar"** → revisar vista previa (primeras 4 filas)
+  3. Verificar auto-detección de columnas SAPD
+  4. Ajustar manualmente los selects si algún campo no se detectó
+  5. Click **"Importar nómina"**
+- **Verificar:**
+  - [ ] Tabla preview aparece con primeras filas
+  - [ ] Mensaje en verde con campos auto-detectados (ícono ✓)
+  - [ ] Aviso amarillo si hay columnas no reconocidas
+  - [ ] Botón "Importar nómina" deshabilitado hasta que RUT y Nombre estén asignados
+  - [ ] Mensaje `"X académico(s) importado(s)."` al confirmar
+  - [ ] Si RUT duplicado: `"X ya estaban en la nómina (datos actualizados)."`
+  - [ ] Si filas con RUT o nombre vacío: `"X fila(s) con errores omitidas."`
 
----
+**Probar idempotencia:**
+  - [ ] Importar el mismo archivo dos veces → `"0 importado(s). X ya estaban en la nómina (datos actualizados)."`
 
-### 📍 **PARTE F: Miembro CCA — Evaluación Final**
-
-#### Test F.1: Evaluar académico
-1. Logout y login: `cca@ucm.cl` / `password`
-2. Click en **"Expedientes"**
-3. Click en el académico
-4. **Verificar:**
-   - ✅ Ve compromisos S1 y S2 (pesos promediados)
-   - ✅ Ve informe de jefatura
-5. Asignar puntajes (1-7) por cada área:
-   - Docencia: 5.5
-   - Investigación: 6.0
-   - Extensión: 5.0
-   - Administración: 5.5
-   - Otras: 5.0
-6. Click en **"Finalizar evaluación"**
-7. **Verificar:**
-   - ✅ Calificación final calculada usando pesos (S1+S2)/2
-   - ✅ Concepto asignado (Excelente/Muy Bueno/etc.)
+**Probar columnas mínimas:**
+  - [ ] Subir Excel con solo RUT y Nombre → importa correctamente, campos SAPD quedan `—`
 
 ---
 
-### 📍 **PARTE G: Vicerrectora — Revisión Final**
+#### T-04: Analista agrega académico individual
 
-#### Test G.1: Comentar evaluación
-1. Logout y login: `vicerrectora@ucm.cl` / `password`
-2. Click en **"Académicos"**
-3. Buscar el académico evaluado
-4. Agregar comentario en su evaluación
-5. **Verificar:**
-   - ✅ Comentario guardado y visible
+- URL: `/analista/periodos/{periodo}/nominas/crear`
+- **Pasos:** Click **"+ Agregar académico"** → completar modal:
+  - RUT: `11.111.111-1`, Nombre: `Prueba Test`, Categoría: `adjunto`, Horas: `18`
+- **Verificar:**
+  - [ ] Modal abre y cierra correctamente
+  - [ ] Académico aparece en tabla con estado `pendiente`
+  - [ ] Intentar agregar mismo RUT → `"Ya está en la nómina de este período."`
 
 ---
 
-## 🎯 4. CASOS ESPECIALES
+#### T-05: Analista exporta nómina
 
-### 4.1 Flujo Multifacultad
-- **FCI:** Repetir tests C-G con usuarios `@ucm.cl`
-- **FCAF:** Repetir tests C-G con usuarios `.fcaf@ucm.cl`
-- **Verificar:** Cada secretario/CCA solo ve su facultad
+- URL: `/analista/periodos/{periodo}/nominas/exportar`
+- **Verificar:**
+  - [ ] Descarga Excel con todos los académicos del período
+  - [ ] Exportar `?solo_excelentes=1` → solo académicos con concepto `Excelente`
 
-### 4.2 Académico sin declarar nada
-Para forzar este flujo, ejecutar:
+---
+
+#### T-06: Analista ve detalle de académico (historial y vigencia)
+
+- URL: `/analista/periodos/{periodo}/nominas/{nomina}/detalle`
+- **Verificar:**
+  - [ ] Datos SAPD completos (N° Personal, RUT, Nombre, Adscripción, Unidad, Posición, Horas, Categoría)
+  - [ ] Sección "Nota vigente": nota, estado (Vigente/Vencida), fecha de vencimiento
+  - [ ] Vigencia: `auxiliar` = 1 año; `adjunto/titular` = 2 años
+  - [ ] Historial de calificaciones ordenado por año desc
+  - [ ] Historial de categorías
+
+---
+
+### Etapa 1 — Carga de evidencias, Jefatura y Validación
+
+> Activar con el seeder de etapa:
+
+```bash
+docker compose exec app php artisan db:seed --class=FlujoEtapa1CargaSeeder
+```
+
+Abre `carga_evidencias`, `validacion_secretario`, `informe_jefatura` (hasta D+20). Reseteará el cronograma a fechas activas desde hoy.
+
+---
+
+#### T-07: Secretario configura plazo de su facultad
+
+- Login: `secretario@ucm.cl`
+- URL: `/secretario/dashboard` → sección plazos
+- **Pasos:** Definir fecha límite de carga para la facultad FCI
+- **Verificar:**
+  - [ ] Fecha límite guardada
+  - [ ] Académicos de FCI pueden subir evidencias hasta esa fecha
+
+---
+
+#### T-08: Académico declara APA semestral
+
+- Login: `academico@ucm.cl`
+- URL: `/academico/declaracion-apa` (redirige a S1 si no ha declarado)
+- **Pasos para S1:**
+  1. Completar horas por dimensión (Docencia, Investigación, Extensión, Administración, Otras)
+  2. Verificar que el porcentaje calculado sume 100%
+  3. Click **"Confirmar S1"**
+- **Pasos para S2:** Repetir en pestaña S2
+- **Verificar:**
+  - [ ] Contador de porcentaje en tiempo real
+  - [ ] Botón "Confirmar" deshabilitado si no suma 100%
+  - [ ] Al confirmar ambos semestres → redirige a dashboard académico
+  - [ ] Si vuelve a `/academico/declaracion-apa` → ya no redirige a declaración
+
+**Probar con `academico.fcaf@ucm.cl`:**
+  - [ ] Solo S1 declarado → redirige automáticamente a declarar S2
+  - [ ] Declarar S2 → accede a carga de evidencias
+
+---
+
+#### T-09: Académico sube evidencias
+
+- URL: `/academico/evidencias`
+- **Verificar (plazo abierto):**
+  - [ ] Puede subir archivos (PDF, Word, imágenes)
+  - [ ] Archivo aparece listado con nombre, categoría y fecha/hora
+  - [ ] Puede eliminar sus propias evidencias
+  - [ ] Puede descargar sus propias evidencias
+
+---
+
+#### T-10: Jefe académico emite informe de jefatura
+
+- Login: `jefe@ucm.cl`
+- URL: `/jefe/academicos`
+- **Pasos:** Ver lista → abrir académico asignado → completar informe → guardar → click "Imprimir"
+- **Verificar:**
+  - [ ] Lista muestra solo académicos asignados a su jefatura
+  - [ ] Puede guardar informe con comentarios
+  - [ ] PDF de informe generado con datos del académico
+  - [ ] Estado "Informe emitido" visible en la lista
+
+---
+
+#### T-11: Secretario gestiona solicitud de exclusión
+
+- Login: `secretario@ucm.cl`
+- URL: `/secretario/solicitudes`
+- **Pasos:** Click **"+ Nueva solicitud"** → seleccionar tipo → completar datos → adjuntar documento
+- **Tipos disponibles:** `licencia_medica`, `perfeccionamiento`, `cargo_administrativo`, `otro`
+- **Verificar:**
+  - [ ] Solicitud creada con estado `activa`
+  - [ ] Académico bloqueado: login como ese académico → redirige a `/academico/bloqueado`
+  - [ ] Click "Reincorporar" → académico recupera acceso
+  - [ ] Puede descargar documento adjunto
+
+---
+
+#### T-12: Secretario valida expediente
+
+- URL: `/secretario/expedientes`
+- **Pasos:** Abrir expediente de `academico@ucm.cl` → revisar evidencias → click **"Validar"**
+- **Verificar:**
+  - [ ] Lista muestra solo académicos de FCI (no FCAF)
+  - [ ] Puede descargar evidencias del académico
+  - [ ] Ve compromisos APA (S1 y S2)
+  - [ ] Estado cambia a `validado` al validar
+  - [ ] Click **"Reabrir"** → vuelve a estado anterior
+
+---
+
+#### T-13: Secretario cierra recepción de su facultad
+
+- URL: `/secretario/expedientes`
+- **Pasos:** Click **"Cerrar recepción"**
+- **Verificar:**
+  - [ ] Plazo de la facultad queda con `cerrado_en` = fecha actual
+  - [ ] Académicos ya no pueden subir más evidencias
+
+---
+
+### Etapa 2 — Evaluación CCA
+
+> Activar con el seeder de etapa (cierra carga, abre evaluación_cca):
+
+```bash
+docker compose exec app php artisan db:seed --class=FlujoEtapa2CcaSeeder
+```
+
+Cierra `carga_evidencias`, `validacion_secretario`, `informe_jefatura`. Abre `evaluacion_cca` (hasta D+20). Marca expedientes con evidencias + compromiso como `carga_cerrada`.
+
+---
+
+#### T-14: CCA revisa expediente
+
+- Login: `cca@ucm.cl`
+- URL: `/cca/expedientes`
+- **Pasos:** Ver lista → abrir expediente de `academico@ucm.cl`
+- **Verificar:**
+  - [ ] Lista muestra solo expedientes `carga_cerrada` de FCI
+  - [ ] Vista del expediente: declaración APA (S1/S2 con pesos), evidencias descargables, informe de jefatura, historial académico
+
+---
+
+#### T-15: CCA evalúa por dimensión
+
+- URL: `/cca/expedientes/{nomina}`
+- **Pasos:** Ingresar nota numérica (1.0–5.0, step 0.1) en cada dimensión → guardar
+- **Verificar:**
+  - [ ] Solo acepta valores entre 1.0 y 5.0 con step 0.1
+  - [ ] Evaluación guardada; puede volver a editar antes de finalizar
+  - [ ] Un miembro CCA no puede ver/editar la evaluación de otro
+
+---
+
+#### T-16: CCA finaliza calificación con actividades extra
+
+- **Pasos:**
+  1. Agregar valor en **"Otras actividades"** (fuera del 100% APA)
+  2. Agregar observación (máx 600 chars) → contador visible `{n}/600`
+  3. Click **"Finalizar"**
+- **Verificar:**
+  - [ ] Nota final calculada: `min(suma_ponderada + extra, 5.0)`
+  - [ ] Concepto asignado automáticamente (Excelente/Muy Bueno/Bueno/Regular/Deficiente)
+  - [ ] Si observación supera 600 chars → campo bloqueado o error de validación
+  - [ ] Expediente pasa a estado `evaluado`
+
+---
+
+#### T-17: CCA genera PDF de calificación
+
+- URL: `/cca/expedientes/{nomina}/calificacion-pdf`
+- **Verificar:**
+  - [ ] PDF se abre con 5 cajas de firma (3 miembros CCA con nombres pre-impresos + académico + secretario)
+
+---
+
+### Etapa 3 — Apelaciones, Cierre y Vicerrectora
+
+> Activar con el seeder de etapa (cierra CCA, abre etapas finales):
+
+```bash
+docker compose exec app php artisan db:seed --class=FlujoEtapa3CierreSeeder
+```
+
+Cierra `evaluacion_cca`. Abre `comunicacion_resultados`, `apelaciones`, `registro_ccda`, `revision_vicerrectoria`. Auto-completa expedientes sin calificación final.
+
+---
+
+#### T-18: Académico ve su calificación y apela
+
+- Login: `academico@ucm.cl`
+- URL: `/academico/dashboard`
+- **Pasos:** Ver nota/concepto publicado → click **"Apelar"** → completar motivo → adjuntar evidencia de apelación → enviar
+- **Verificar:**
+  - [ ] Nota y concepto visibles en dashboard
+  - [ ] Apelación enviada → estado `en_apelacion`
+  - [ ] Puede subir evidencias de apelación (lista separada)
+  - [ ] Puede eliminar evidencias de apelación antes de que la resuelvan
+
+---
+
+#### T-19: Secretario gestiona apelación (nivel CCA)
+
+- Login: `secretario@ucm.cl`
+- URL: `/secretario/expedientes/{nomina}`
+- **Para concepto Excelente/Muy Bueno/Bueno:**
+  - **Pasos:** Resolver apelación → registrar resultado → cerrar
+  - **Verificar:** [ ] Apelación resuelta; estado actualizado
+- **Para concepto Regular/Deficiente:**
+  - **Verificar:** [ ] Apelación derivada automáticamente a CCDA (`destino=ccda`)
+
+---
+
+#### T-20: Analista CCDA resuelve apelación de 2do nivel
+
+- Login: `analista@ucm.cl`
+- URL: `/analista/apelaciones`
+- **Pasos:** Ver apelaciones derivadas → abrir una → revisar evidencias → evaluar → finalizar
+- **Verificar:**
+  - [ ] Solo aparecen apelaciones con `destino=ccda`
+  - [ ] Puede descargar evidencias de la apelación
+  - [ ] Al finalizar → resultado registrado y visible para académico
+
+---
+
+#### T-21: Analista CCDA hace Registro CCDA
+
+- URL: `/analista/registro-ccda`
+- **Pasos:** Ver tabla por facultad → verificar automáticamente los checks → guardar verificación
+- **Checks automáticos por académico:**
+  - ¿Tiene nota/concepto final?
+  - ¿Apelación resuelta (si la hubo)?
+  - ¿Retroalimentación registrada?
+- **Verificar:**
+  - [ ] Tabla muestra todas las facultades con conteos
+  - [ ] Verificación guardada por académico y por facultad
+
+---
+
+#### T-22: Secretario cierra el proceso
+
+- URL: `/secretario/expedientes`
+- **Pasos:** Click **"Cerrar proceso"** → confirmar
+- **Verificar:**
+  - [ ] Si hay apelaciones pendientes → no puede cerrar (error)
+  - [ ] Al cerrar → acta de cierre generada
+  - [ ] URL `/secretario/acta-cierre/{id}` → PDF descargable del acta
+
+---
+
+#### T-23: Vicerrectora revisa y comenta
+
+- Login: `vicerrectora@ucm.cl`
+- URL: `/vicerrectora/academicos`
+- **Pasos:**
+  1. Filtrar por facultad (selector)
+  2. Filtrar por concepto (Excelente, Muy Bueno, etc.)
+  3. Buscar por nombre o RUT
+  4. Abrir expediente → `/vicerrectora/academicos/{nomina}`
+  5. Dejar comentario en una evaluación
+- **Verificar:**
+  - [ ] Ve académicos de todas las facultades (vista global)
+  - [ ] Filtros funcionan en tiempo real sin recarga
+  - [ ] Expediente: datos académico, calificación final (nota+concepto+observación), retroalimentación CCA por evaluador, listado de evidencias
+  - [ ] Solo lectura: no puede editar nada del expediente
+  - [ ] Comentario guardado y visible en la lista con texto truncado
+  - [ ] Volver a abrir el mismo comentario → texto previo cargado
+
+---
+
+## 4. Reportes CCDA
+
+> Accesibles en cualquier etapa del proceso con `analista@ucm.cl`.
+
+#### T-24: Estado proceso por facultad
+
+- URL: `/analista/estado-proceso`
+- **Verificar:**
+  - [ ] Tabla con conteos por facultad (pendientes, en carga, evaluados, cerrados)
+  - [ ] Muestra etapa actual del cronograma
+
+---
+
+#### T-25: Reporte de calificaciones
+
+- URL: `/analista/reporte-calificaciones`
+- **Verificar:**
+  - [ ] Reporte agrupado por facultad con nota/concepto por académico
+
+---
+
+#### T-26: Reporte de incumplimientos
+
+- URL: `/analista/incumplimientos`
+- **Verificar:**
+  - [ ] Lista de académicos sin evidencias, sin declaración APA o fuera de plazo
+
+---
+
+#### T-27: Ver solicitudes de exclusión (como analista)
+
+- URL: `/analista/solicitudes`
+- **Verificar:**
+  - [ ] Lista con todas las solicitudes de todas las facultades
+  - [ ] Puede descargar documento respaldo de cada solicitud
+
+---
+
+## 5. Casos Borde
+
+| # | Caso | Cómo probarlo | Resultado esperado |
+|---|---|---|---|
+| E-01 | Académico con licencia médica | Login `maria.soto@ucm.cl` / `password` | Redirige a `/academico/bloqueado` |
+| E-02 | Límite 600 chars en observación CCA | En T-16, pegar 601 caracteres | Campo bloqueado o validación 422 |
+| E-03 | Nota fuera de rango (0.9 o 5.1) | En T-15, escribir valor inválido | `type=number min=1 max=5 step=0.1` bloquea en HTML5 |
+| E-04 | Cap nota final ≤ 5.0 con extra | En T-16, nota base 4.8 + extra 0.3 | Nota final = 5.0 (no 5.1) |
+| E-05 | Cerrar proceso con apelación pendiente | En T-22, no resolver apelación antes | Error bloqueante: "Hay apelaciones pendientes" |
+| E-06 | RBAC — acceder a URL de otro rol | Login como académico → ir a `/cca/expedientes` | 403 o redirección |
+| E-07 | Login con credenciales incorrectas | Password erróneo | Error visible en pantalla |
+| E-08 | Secretario ve solo su facultad | Login `secretario@ucm.cl` → expedientes | Solo expedientes FCI; FCAF no aparece |
+| E-09 | Multifacultad paralela | Flujo completo con usuarios FCAF | Ambas facultades operan independientemente |
+| E-10 | Excel con fila vacía al final | Importar con fila vacía | Se omite silenciosamente |
+| E-11 | Excel con RUT sin formato | RUT como `12345678` sin puntos/guión | Importa o muestra error claro |
+| E-12 | Declaración APA que no suma 100% | En T-08, ingresar 50+30+10+5 | Botón "Confirmar" deshabilitado |
+| E-13 | Reimportar Excel con académico con licencia | Mismo Excel, académico tiene `con_licencia=true` | Datos SAPD actualizados; flag licencia intacto |
+
+---
+
+## 6. Mensajes Flash a Verificar
+
+| Acción | Mensaje esperado |
+|---|---|
+| Importación exitosa | `"X académico(s) importado(s)."` |
+| Importación con duplicados | `"... X ya estaban en la nómina (datos actualizados)."` |
+| Todos duplicados | `"0 importado(s). X ya estaban en la nómina (datos actualizados)."` |
+| Agregar individual exitoso | `"Nombre Apellido agregado a la nómina."` |
+| Agregar individual duplicado | `"Nombre Apellido ya está en la nómina de este período."` |
+| Expediente validado | Estado cambia visualmente a `validado` |
+| Calificación finalizada | Nota + concepto visible en expediente |
+| Apelación enviada | Estado `en_apelacion` |
+| Proceso cerrado | Botón para descargar acta de cierre |
+
+---
+
+## 7. Troubleshooting
+
+### Error al hacer login
+```bash
+docker compose exec app php artisan cache:clear
+docker compose exec app php artisan config:clear
+docker compose exec app php artisan view:clear
+```
+
+### Cambios en código no se reflejan
+```bash
+# Cambios React (.jsx)
+docker compose restart vite
+
+# Cambios PHP
+docker compose restart app
+```
+
+### Volver a un estado específico del flujo
+
+```bash
+# Reiniciar todo (período + nóminas + usuarios)
+docker compose exec app php artisan migrate:fresh --seed
+
+# Solo regresar a Etapa 1 (sin borrar BD)
+docker compose exec app php artisan db:seed --class=FlujoEtapa1CargaSeeder
+
+# Avanzar a Etapa 2 (cierra carga, abre CCA)
+docker compose exec app php artisan db:seed --class=FlujoEtapa2CcaSeeder
+
+# Avanzar a Etapa 3 (cierra CCA, abre apelaciones y vicerrectoría)
+docker compose exec app php artisan db:seed --class=FlujoEtapa3CierreSeeder
+```
+
+### Forzar académico sin declaración APA (para probar flujo desde S1)
 ```bash
 docker compose exec app php artisan tinker
 > $u = App\Models\User::where('email','academico@ucm.cl')->first();
@@ -262,101 +562,73 @@ docker compose exec app php artisan tinker
 > App\Models\CompromisoApa::where('nomina_id', $n->id)->delete();
 > exit
 ```
-Luego login como `academico@ucm.cl` → debe redirigir a declaración S1.
 
-### 4.3 Forzar fecha de cierre S1 pasada
-Para probar que S2 se desbloquea cuando S1 cierra:
+### Forzar cierre de S1 (para desbloquear S2)
 ```bash
 docker compose exec app php artisan tinker
 > App\Models\SemestreAcademico::where('numero', 1)->update(['fecha_cierre' => now()->subDays(5)]);
 > exit
 ```
 
-### 4.4 Generar reporte de incumplimientos
-1. Como `analista@ucm.cl`
-2. Ir a **"Incumplimientos"**
-3. Ver académicos con nota vencida (los 9 vencidos del CSV)
-
----
-
-## 🐛 5. TROUBLESHOOTING
-
-### Problema: Error al hacer login
-```bash
-docker compose exec app php artisan cache:clear
-docker compose exec app php artisan config:clear
-docker compose exec app php artisan view:clear
-```
-
-### Problema: Cambios en código no se reflejan
-```bash
-# Si modificaste archivos React (.jsx)
-docker compose restart vite
-
-# Si modificaste archivos PHP
-docker compose restart app
-```
-
-### Problema: Quiero empezar de cero
-```bash
-docker compose exec app php artisan migrate:fresh --seed
-```
-
-### Problema: La importación CSV no detecta columnas correctas
+### Importación CSV no detecta columnas
 - Verificar que el CSV tenga encabezados en la primera fila
-- Verificar que use **"Categoría 2026"** (no solo "Categoría") para la categoría actual
-
-### Problema: Vencimientos incorrectos
-- **Auxiliar:** debe tener fecha categorización en **2025** (vence 2026)
-- **Adjunto/Titular:** debe tener fecha categorización en **2024** (vence 2026)
-- Verificar que la columna "Categoría 2026" tenga las fechas correctas
+- Usar `"Categoría 2026"` (con año) para la categoría actual
+- Auxiliar: fecha categorización 2025 → vence 2026; Adjunto/Titular: 2024 → vence 2026
 
 ---
 
-## ✅ CHECKLIST FINAL DE PRUEBAS
-
-Marca cada test al completarlo:
+## 8. Checklist Final
 
 ### Admin
-- [ ] Test A.1: Configurar semestres
+- [ ] T-00: Configurar fechas semestres S1 y S2
 
-### Analista CCDA
-- [ ] Test B.1: Visualizar nómina (sin botón "Exportar Excelentes", sin "+ Caso")
-- [ ] Test B.2: Importar CSV con 20 académicos
-- [ ] Test B.3: Verificar vigencias coherentes (Juan Pérez vence 15/03/2026)
-- [ ] Test B.4: Agregar columnas manuales al reporte y exportar PDF
+### Analista CCDA — Configuración inicial
+- [ ] T-01: Crear período con cronograma 8 etapas
+- [ ] T-02: Descargar plantilla nómina SAPD
+- [ ] T-03: Importar nómina Excel SAPD (auto-detección + idempotencia)
+- [ ] T-04: Agregar académico individual (+ rechazo duplicado)
+- [ ] T-05: Exportar nómina completa y solo Excelentes
+- [ ] T-06: Ver detalle académico (historial + vigencia nota)
 
-### Académico
-- [ ] Test C.1: `academico@ucm.cl` accede directo a evidencias (S1 y S2 OK)
-- [ ] Test C.2: `academico.fcaf@ucm.cl` redirige a declarar S2
-- [ ] Test C.3: Validación de suma 100%
+### Etapa 1 — Carga, Jefatura y Validación
+- [ ] T-07: Secretario configura plazo de facultad
+- [ ] T-08: Académico FCI declara APA (S1 + S2 suman 100%)
+- [ ] T-08b: Académico FCAF declara S2 pendiente
+- [ ] T-09: Académico sube y gestiona evidencias
+- [ ] T-10: Jefe emite informe de jefatura + PDF
+- [ ] T-11: Secretario crea solicitud de exclusión (licencia médica)
+- [ ] T-12: Secretario valida expediente + puede reabrir
+- [ ] T-13: Secretario cierra recepción de su facultad
 
-### Secretario
-- [ ] Test D.1: Validar expediente FCI
+### Etapa 2 — Evaluación CCA
+- [ ] T-14: CCA revisa expediente completo (APA + evidencias + jefatura)
+- [ ] T-15: CCA evalúa por dimensión (notas 1.0–5.0, step 0.1)
+- [ ] T-16: CCA finaliza con actividades extra (cap ≤ 5.0) + observación 600 chars
+- [ ] T-17: CCA genera PDF de calificación con 5 firmas
 
-### Jefe Académico
-- [ ] Test E.1: Emitir informe
+### Etapa 3 — Apelaciones, Cierre y Vicerrectora
+- [ ] T-18: Académico ve calificación y apela con evidencia
+- [ ] T-19: Secretario resuelve apelación CCA / deriva a CCDA
+- [ ] T-20: Analista CCDA resuelve apelación 2do nivel
+- [ ] T-21: Analista CCDA hace Registro CCDA (verificación por facultad)
+- [ ] T-22: Secretario cierra proceso → acta de cierre PDF
+- [ ] T-23: Vicerrectora revisa (filtros + búsqueda + comentario)
 
-### Miembro CCA
-- [ ] Test F.1: Evaluar con pesos promediados S1/S2
+### Reportes CCDA
+- [ ] T-24: Estado proceso por facultad
+- [ ] T-25: Reporte de calificaciones
+- [ ] T-26: Reporte de incumplimientos
+- [ ] T-27: Solicitudes de exclusión como analista
 
-### Vicerrectora
-- [ ] Test G.1: Comentar evaluación
-
-### Casos especiales
-- [ ] Multifacultad FCI/FCAF segregado
-- [ ] Académico sin compromisos redirige a S1
-- [ ] Forzar cierre S1 desbloquea S2
+### Casos borde
+- [ ] E-01: Académico con licencia → bloqueado
+- [ ] E-02: Observación CCA > 600 chars → bloqueado
+- [ ] E-04: Cap nota 5.0 con actividades extra
+- [ ] E-05: Cerrar proceso con apelación pendiente → error
+- [ ] E-06: RBAC — URL de otro rol → 403
+- [ ] E-09: Multifacultad FCI/FCAF independientes
+- [ ] E-12: Declaración APA sin suma 100% → botón deshabilitado
 
 ---
 
-## 📞 Recursos
-
-- **Archivo CSV:** `/Users/tban/Documents/apa-ucm/nomina_academicos_vigencia_realista.csv`
-- **URL local:** http://localhost:8080
-- **Password universal:** `password`
-- **Vite dev:** http://localhost:5173
-
----
-
-**¡Listo para testing! 🚀**
+**URL local:** http://localhost:8080 | **Password universal:** `password`

@@ -164,6 +164,44 @@ class SecretarioController extends Controller
         ]);
     }
 
+    public function showCategoria(Nomina $nomina, CategoriaApa $categoria): Response
+    {
+        $user = auth()->user();
+
+        if ($nomina->academico->facultad_id !== $user->facultad_id) {
+            abort(403);
+        }
+
+        $mapEv = fn ($ev) => [
+            'id'             => $ev->id,
+            'nombre_archivo' => $ev->nombre_archivo,
+            'tamano'         => $ev->tamanoFormateado(),
+            'descripcion'    => $ev->descripcion,
+            'mime_type'      => $ev->mime_type,
+            'created_at'     => $ev->created_at->format('d/m/Y H:i'),
+            'url_descarga'   => route('secretario.evidencias.download', [$nomina->id, $ev->id]),
+            'url_preview'    => route('secretario.evidencias.preview',  [$nomina->id, $ev->id]),
+        ];
+
+        return Inertia::render('Secretario/ExpedienteCategoria', [
+            'nomina'             => [
+                'id'     => $nomina->id,
+                'nombre' => $nomina->academico->name,
+            ],
+            'categoria'          => [
+                'id'          => $categoria->id,
+                'nombre'      => $categoria->nombre,
+                'descripcion' => $categoria->descripcion,
+            ],
+            'evidenciasNormales'  => $nomina->evidenciasNormales()
+                ->where('categoria_id', $categoria->id)
+                ->get()->map($mapEv)->values(),
+            'evidenciasApelacion' => $nomina->evidenciasApelacion()
+                ->where('categoria_id', $categoria->id)
+                ->get()->map($mapEv)->values(),
+        ]);
+    }
+
     private function verificarCierreProceso(string $periodoId, string $facultadId, ?PlazoFacultad $plazo): array
     {
         if (!$plazo || !$plazo->estaCerradoFormalmente()) {

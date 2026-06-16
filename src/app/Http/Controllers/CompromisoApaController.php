@@ -64,6 +64,10 @@ class CompromisoApaController extends Controller
             ->where('semestre', $semestre)
             ->first();
 
+        $horasContrato = $semestre === 'S1'
+            ? (float) ($user->horas_contrato_isem  ?? 0)
+            : (float) ($user->horas_contrato_iisem ?? 0);
+
         return Inertia::render('Academico/DeclaracionApa', [
             'periodo'       => $periodo->only(['id', 'anio', 'nombre']),
             'nomina'        => ['id' => $nomina->id],
@@ -79,7 +83,7 @@ class CompromisoApaController extends Controller
                 'hrs_administracion' => (float) ($compromisoExistente->hrs_administracion ?? 0),
                 'hrs_otras'          => (float) ($compromisoExistente->hrs_otras          ?? 0),
             ] : null,
-            'config'        => $this->configVista(),
+            'config'        => array_merge($this->configVista(), ['horas_contrato' => $horasContrato]),
         ]);
     }
 
@@ -113,7 +117,11 @@ class CompromisoApaController extends Controller
             return back()->with('error', 'Este semestre ya fue confirmado.');
         }
 
-        $data = $this->validarHorasYCalcularPct($request);
+        $horasContrato = $semestre === 'S1'
+            ? (float) ($user->horas_contrato_isem  ?? 0)
+            : (float) ($user->horas_contrato_iisem ?? 0);
+
+        $data = $this->validarHorasYCalcularPct($request, $horasContrato);
 
         CompromisoApa::updateOrCreate(
             ['nomina_id' => $nomina->id, 'periodo_id' => $periodo->id, 'semestre' => $semestre],
@@ -140,7 +148,7 @@ class CompromisoApaController extends Controller
      *
      * @return array<string, float>
      */
-    private function validarHorasYCalcularPct(Request $request): array
+    private function validarHorasYCalcularPct(Request $request, float $horasContrato = 0): array
     {
         $decimales = (int) ConfiguracionApa::get('decimales_pct', 2);
 
@@ -159,6 +167,12 @@ class CompromisoApaController extends Controller
         if ($totalHrs <= 0) {
             throw ValidationException::withMessages([
                 'hrs_docencia' => 'Debe ingresar horas en al menos un área.',
+            ]);
+        }
+
+        if ($horasContrato > 0 && abs($totalHrs - $horasContrato) > 0.01) {
+            throw ValidationException::withMessages([
+                'hrs_docencia' => "El total de horas ({$totalHrs}h) debe ser exactamente igual a las horas de contrato del semestre ({$horasContrato}h).",
             ]);
         }
 

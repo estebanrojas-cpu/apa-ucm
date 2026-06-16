@@ -11,9 +11,12 @@ use App\Models\Nomina;
 use App\Models\Periodo;
 use App\Models\User;
 use Carbon\Carbon;
+use App\Mail\CredencialesAcademicoMail;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -373,16 +376,13 @@ class NominaController extends Controller
             $user = User::where('rut', $rut)->first();
 
             if (!$user) {
-                $emailBase = Str::slug($nombre, '.') . '@ucm.cl';
-                $email     = User::where('email', $emailBase)->exists()
-                    ? Str::slug($nombre, '.') . '.' . Str::random(4) . '@ucm.cl'
-                    : $emailBase;
+                $email = $this->resolveEmail($this->buildEmailFromNombre($nombre));
 
                 $user = User::create([
                     'name'     => $nombre,
                     'rut'      => $rut,
                     'email'    => $email,
-                    'password' => Hash::make(Str::random(16)),
+                    'password' => Hash::make($this->buildPasswordFromRut($rut)),
                     'role'     => 'academico',
                 ]);
             }
@@ -418,6 +418,91 @@ class NominaController extends Controller
             ->route('analista.periodos.nominas.create', $periodo->id)
             ->with('success', $msg)
             ->with('import_errores', $detalleErrores);
+    }
+
+    public function enviarCredenciales(Periodo $periodo): RedirectResponse
+    {
+        $nominas = Nomina::where('periodo_id', $periodo->id)->with('academico')->get();
+
+        $enviados    = 0;
+        $errores     = 0;
+        $ultimoError = null;
+
+        foreach ($nominas as $nomina) {
+            $user = $nomina->academico;
+            if (!$user || !$user->email) {
+                $errores++;
+                continue;
+            }
+
+            $password = $this->buildPasswordFromRut($user->rut ?? '');
+            if (!$password) {
+                $errores++;
+                continue;
+            }
+
+            // Restablece contraseña inicial (idempotente: siempre el mismo valor derivado del RUT)
+            $user->password = Hash::make($password);
+            $user->save();
+
+            try {
+                Mail::to($user->email)->send(
+                    new CredencialesAcademicoMail($user->name, $user->email, $password)
+                );
+                $enviados++;
+            } catch (\Throwable $e) {
+                $errores++;
+                $ultimoError ??= $e->getMessage();
+            }
+        }
+
+        if ($enviados === 0 && $errores > 0) {
+            return back()->with('error', "No se pudo enviar ningún correo. Error: " . ($ultimoError ?? 'desconocido'));
+        }
+
+        $msg = "Credenciales enviadas a {$enviados} académico(s).";
+        if ($errores) {
+            $msg .= " {$errores} no pudieron ser notificados.";
+        }
+
+        return back()->with('success', $msg);
+    }
+
+    private function buildEmailFromNombre(string $nombre): string
+    {
+        $normalize = fn (string $s): string => preg_replace('/[^a-z]/', '', strtr(
+            mb_strtolower(trim($s)),
+            ['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ü'=>'u','ñ'=>'n']
+        ));
+
+        $words    = preg_split('/\s+/', trim($nombre));
+        $primero  = $normalize($words[0] ?? 'academico');
+        $apellido = $normalize($words[1] ?? '');
+
+        return ($apellido ? "{$primero}.{$apellido}" : $primero) . '@ucm.cl';
+    }
+
+    private function resolveEmail(string $baseEmail): string
+    {
+        if (!User::where('email', $baseEmail)->exists()) {
+            return $baseEmail;
+        }
+
+        $base    = explode('@', $baseEmail)[0];
+        $counter = 1;
+        do {
+            $candidate = sprintf('%s.%02d@ucm.cl', $base, $counter);
+            $counter++;
+        } while (User::where('email', $candidate)->exists());
+
+        return $candidate;
+    }
+
+    private function buildPasswordFromRut(string $rut): string
+    {
+        $clean  = str_replace('.', '', $rut);
+        $cuerpo = explode('-', $clean)[0];
+        return preg_replace('/\D/', '', $cuerpo);
     }
 
     private function poblarHistoriales(Nomina $nomina, array $cells, array $mapeoHistorial): void
@@ -494,16 +579,13 @@ class NominaController extends Controller
         $user = User::where('rut', $data['rut'])->first();
 
         if (!$user) {
-            $emailBase = Str::slug($data['nombre'], '.') . '@ucm.cl';
-            $email     = User::where('email', $emailBase)->exists()
-                ? Str::slug($data['nombre'], '.') . '.' . Str::random(4) . '@ucm.cl'
-                : $emailBase;
+            $email = $this->resolveEmail($this->buildEmailFromNombre($data['nombre']));
 
             $user = User::create([
                 'name'        => $data['nombre'],
                 'rut'         => $data['rut'],
                 'email'       => $email,
-                'password'    => Hash::make(Str::random(16)),
+                'password'    => Hash::make($this->buildPasswordFromRut($data['rut'])),
                 'role'        => 'academico',
                 'facultad_id' => $data['facultad_id'] ?? null,
             ]);

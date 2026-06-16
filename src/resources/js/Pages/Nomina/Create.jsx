@@ -560,11 +560,23 @@ function NominaGrid({ nominasEnPeriodo, periodo, columnasAdicionales, onEditar }
 // ── Componente principal ──────────────────────────────────────────────────────
 export default function NominaCreate({ periodo, facultades, academicos, nominasEnPeriodo, columnas_adicionales }) {
     const { flash } = usePage().props;
-    const [showModal, setShowModal]         = useState(false);
-    const [editandoNomina, setEditandoNomina] = useState(null);
+    const [showModal, setShowModal]           = useState(false);
+    const [editandoNomina, setEditandoNomina] = useState(false);
+    const [enviandoAcceso, setEnviandoAcceso] = useState(false);
 
-    const totalLicencias = nominasEnPeriodo.filter(n => n.con_licencia).length;
+    const totalLicencias      = nominasEnPeriodo.filter(n => n.con_licencia).length;
     const columnasAdicionales = columnas_adicionales ?? [];
+
+    function handleEnviarAcceso() {
+        if (nominasEnPeriodo.length === 0) return;
+        if (!confirm(`¿Enviar link de acceso a los ${nominasEnPeriodo.length} académico(s) de esta nómina?\n\nCada uno recibirá un correo para establecer su contraseña.`)) return;
+        setEnviandoAcceso(true);
+        router.post(
+            `/analista/periodos/${periodo.id}/nominas/enviar-credenciales`,
+            {},
+            { onFinish: () => setEnviandoAcceso(false) }
+        );
+    }
 
     return (
         <>
@@ -589,6 +601,16 @@ export default function NominaCreate({ periodo, facultades, academicos, nominasE
                             className="text-xs border border-gray-300 text-gray-600 hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors">
                             ↓ Exportar Excel
                         </a>
+                        {nominasEnPeriodo.length > 0 && (
+                            <button
+                                onClick={handleEnviarAcceso}
+                                disabled={enviandoAcceso}
+                                className="text-xs border border-[#0096D6] text-[#0096D6] hover:bg-[#0096D6]/10 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1.5"
+                            >
+                                <MailIcon />
+                                {enviandoAcceso ? 'Enviando...' : 'Comunicar acceso'}
+                            </button>
+                        )}
                         <button onClick={() => setShowModal(true)}
                             className="text-xs bg-[#1B2D6B] text-white px-3 py-1.5 rounded-lg hover:bg-[#152558] transition-colors">
                             + Agregar académico
@@ -666,5 +688,14 @@ export default function NominaCreate({ periodo, facultades, academicos, nominasE
                 />
             )}
         </>
+    );
+}
+
+function MailIcon() {
+    return (
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+        </svg>
     );
 }
