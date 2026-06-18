@@ -387,9 +387,12 @@ class NominaController extends Controller
                     'email'                 => $email,
                     'password'              => Hash::make($this->buildPasswordFromRut($rut)),
                     'role'                  => 'academico',
+                    'facultad_id'           => $data['facultad_id'] ?? null,
                     'horas_contrato_isem'   => $horasSem,
                     'horas_contrato_iisem'  => $horasSem,
                 ]);
+            } elseif (!$user->facultad_id && !empty($data['facultad_id'])) {
+                $user->update(['facultad_id' => $data['facultad_id']]);
             }
 
             // Crear o actualizar nómina
