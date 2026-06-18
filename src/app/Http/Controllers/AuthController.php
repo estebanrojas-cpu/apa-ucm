@@ -50,7 +50,6 @@ class AuthController extends Controller
             'miembro_cca'    => route('cca.dashboard'),
             'jefe_academico' => route('jefe.dashboard'),
             'vicerrectora'   => route('vicerrectora.dashboard'),
-            'rrhh'           => route('rrhh.dashboard'),
             'academico'      => route('academico.dashboard'),
             default          => route('login'),
         };
