@@ -167,6 +167,13 @@ class DemoSeeder extends Seeder
             'concepto'  => 'Muy Bueno',
         ]);
 
+        $this->aplicarPerfil($academico, [
+            'categoria' => 'adjunto',
+            'linea'     => 'docente',
+            'nota'      => 4.0,
+            'concepto'  => 'Muy Bueno',
+        ]);
+
         foreach ([$academico, $paula] as $i => $u) {
             Nomina::firstOrCreate(
                 ['periodo_id' => $periodo->id, 'user_id' => $u->id],
@@ -199,13 +206,13 @@ class DemoSeeder extends Seeder
             CompromisoApa::updateOrCreate(
                 ['nomina_id' => $nominaFcaf->id, 'periodo_id' => $periodo->id, 'semestre' => 'S1'],
                 [
-                    'hrs_docencia'       => 18,
-                    'hrs_investigacion'  => 14,
+                    'hrs_docencia'       => 20,
+                    'hrs_investigacion'  => 12,
                     'hrs_extension'      => 4,
                     'hrs_administracion' => 4,
                     'hrs_otras'          => 0,
-                    'pct_docencia'       => 45,
-                    'pct_investigacion'  => 35,
+                    'pct_docencia'       => 50,
+                    'pct_investigacion'  => 30,
                     'pct_extension'      => 10,
                     'pct_administracion' => 10,
                     'pct_otras'          => 0,
@@ -266,8 +273,8 @@ class DemoSeeder extends Seeder
             'categoria_academica'  => $perfil['categoria'],
             'linea_desarrollo'     => $perfil['linea'],
             'fecha_jerarquizacion' => '2015-06-01',
-            'horas_contrato_isem'  => 18,
-            'horas_contrato_iisem' => 18,
+            'horas_contrato_isem'  => 40,
+            'horas_contrato_iisem' => 40,
             'nota_anterior'        => $perfil['nota'],
             'concepto_anterior'    => $perfil['concepto'],
         ]);
@@ -407,61 +414,9 @@ class DemoSeeder extends Seeder
         }
     }
 
-    /**
-     * Compromisos APA precargados para academico@ (S1 y S2 ya declarados).
-     * Esto permite que el usuario pruebe directo el flujo de carga de evidencias
-     * sin tener que declarar compromisos primero.
-     */
     private function crearCompromisosDemo(Periodo $periodo, array $academicos): void
     {
-        if (!isset($academicos[0])) {
-            return;
-        }
-
-        $nomina = Nomina::where('periodo_id', $periodo->id)
-            ->where('user_id', $academicos[0]->id)
-            ->first();
-
-        if (!$nomina) {
-            return;
-        }
-
-        // S1 y S2 confirmados — el académico FCI ya puede cargar evidencias.
-        CompromisoApa::updateOrCreate(
-            ['nomina_id' => $nomina->id, 'periodo_id' => $periodo->id, 'semestre' => 'S1'],
-            [
-                'hrs_docencia'       => 20,
-                'hrs_investigacion'  => 10,
-                'hrs_extension'      => 6,
-                'hrs_administracion' => 4,
-                'hrs_otras'          => 0,
-                'pct_docencia'       => 50,
-                'pct_investigacion'  => 25,
-                'pct_extension'      => 15,
-                'pct_administracion' => 10,
-                'pct_otras'          => 0,
-                'fuente'             => 'manual',
-                'confirmado_en'      => now(),
-            ]
-        );
-
-        CompromisoApa::updateOrCreate(
-            ['nomina_id' => $nomina->id, 'periodo_id' => $periodo->id, 'semestre' => 'S2'],
-            [
-                'hrs_docencia'       => 18,
-                'hrs_investigacion'  => 12,
-                'hrs_extension'      => 6,
-                'hrs_administracion' => 4,
-                'hrs_otras'          => 0,
-                'pct_docencia'       => 45,
-                'pct_investigacion'  => 30,
-                'pct_extension'      => 15,
-                'pct_administracion' => 10,
-                'pct_otras'          => 0,
-                'fuente'             => 'manual',
-                'confirmado_en'      => now(),
-            ]
-        );
+        // Sin compromisos pre-declarados — academico@ declara APA desde cero.
     }
 
     /**
