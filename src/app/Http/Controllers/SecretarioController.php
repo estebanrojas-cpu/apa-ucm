@@ -314,6 +314,10 @@ class SecretarioController extends Controller
                 'rut'          => $n->academico->rut,
                 'departamento' => $n->academico->departamento?->nombre,
                 'estado'       => $n->estado,
+                'calificacion' => $n->calificacionFinal?->calificacion,
+                'puntaje'      => $n->calificacionFinal?->puntaje_total,
+                'observacion'  => $n->calificacionFinal?->observacion,
+                'es_apelacion' => $n->calificacionFinal?->es_apelacion ?? false,
             ]);
 
         return view('secretario.acta_cierre', compact('acta', 'periodo', 'facultad', 'nominas'));

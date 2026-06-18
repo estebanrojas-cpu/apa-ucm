@@ -102,9 +102,10 @@
             font-weight: bold;
         }
 
-        .badge-muy-bueno  { background: #d1fae5; color: #065f46; }
-        .badge-bueno      { background: #dbeafe; color: #1e40af; }
-        .badge-aceptable  { background: #fef9c3; color: #854d0e; }
+        .badge-excelente  { background: #d1fae5; color: #065f46; }
+        .badge-muy-bueno  { background: #dbeafe; color: #1e40af; }
+        .badge-bueno      { background: #e0e7ff; color: #3730a3; }
+        .badge-regular    { background: #fef9c3; color: #854d0e; }
         .badge-deficiente { background: #fee2e2; color: #991b1b; }
         .badge-sin-calif  { background: #f3f4f6; color: #6b7280; }
 
@@ -228,6 +229,10 @@
             <div class="lbl">Con calificación</div>
         </div>
         <div class="resumen-item">
+            <div class="val">{{ $califs['excelente'] ?? 0 }}</div>
+            <div class="lbl">Excelente</div>
+        </div>
+        <div class="resumen-item">
             <div class="val">{{ $califs['muy_bueno'] ?? 0 }}</div>
             <div class="lbl">Muy Bueno</div>
         </div>
@@ -236,8 +241,8 @@
             <div class="lbl">Bueno</div>
         </div>
         <div class="resumen-item">
-            <div class="val">{{ $califs['aceptable'] ?? 0 }}</div>
-            <div class="lbl">Aceptable</div>
+            <div class="val">{{ $califs['regular'] ?? 0 }}</div>
+            <div class="lbl">Regular</div>
         </div>
         <div class="resumen-item">
             <div class="val">{{ $califs['deficiente'] ?? 0 }}</div>
@@ -265,16 +270,18 @@
             @foreach ($nominas as $i => $n)
             @php
                 $badgeClass = match($n['calificacion'] ?? '') {
+                    'excelente'  => 'badge-excelente',
                     'muy_bueno'  => 'badge-muy-bueno',
                     'bueno'      => 'badge-bueno',
-                    'aceptable'  => 'badge-aceptable',
+                    'regular'    => 'badge-regular',
                     'deficiente' => 'badge-deficiente',
                     default      => 'badge-sin-calif',
                 };
                 $labelCalif = match($n['calificacion'] ?? '') {
+                    'excelente'  => 'Excelente',
                     'muy_bueno'  => 'Muy Bueno',
                     'bueno'      => 'Bueno',
-                    'aceptable'  => 'Aceptable',
+                    'regular'    => 'Regular',
                     'deficiente' => 'Deficiente',
                     default      => 'Sin calificación',
                 };
