@@ -289,6 +289,7 @@ class NominaController extends Controller
             'mapeo.*'             => ['nullable', 'integer', 'min:0'],
             'datos_adicionales'   => ['nullable', 'array'],
             'datos_adicionales.*' => ['nullable', 'integer', 'min:0'],
+            'facultad_id'         => ['nullable', 'uuid', 'exists:facultades,id'],
         ]);
 
         $fullPath = Storage::disk('local')->path($data['path']);
@@ -378,12 +379,16 @@ class NominaController extends Controller
             if (!$user) {
                 $email = $this->resolveEmail($this->buildEmailFromNombre($nombre));
 
+                $horasSem = 40;
+
                 $user = User::create([
-                    'name'     => $nombre,
-                    'rut'      => $rut,
-                    'email'    => $email,
-                    'password' => Hash::make($this->buildPasswordFromRut($rut)),
-                    'role'     => 'academico',
+                    'name'                  => $nombre,
+                    'rut'                   => $rut,
+                    'email'                 => $email,
+                    'password'              => Hash::make($this->buildPasswordFromRut($rut)),
+                    'role'                  => 'academico',
+                    'horas_contrato_isem'   => $horasSem,
+                    'horas_contrato_iisem'  => $horasSem,
                 ]);
             }
 
@@ -399,6 +404,7 @@ class NominaController extends Controller
                 $nomina = Nomina::create(array_merge($camposNomina, [
                     'periodo_id'   => $periodo->id,
                     'user_id'      => $user->id,
+                    'facultad_id'  => $data['facultad_id'] ?? null,
                     'estado'       => 'pendiente',
                     'con_licencia' => false,
                 ]));

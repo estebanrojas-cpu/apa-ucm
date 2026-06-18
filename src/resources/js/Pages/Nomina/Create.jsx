@@ -239,7 +239,7 @@ const CAMPOS_SAPD = [
 ];
 
 // ── Panel importación Excel ───────────────────────────────────────────────────
-function PanelExcel({ periodo }) {
+function PanelExcel({ periodo, facultades }) {
     const { flash, errors } = usePage().props;
     const preview   = flash?.excel_preview;
 
@@ -248,6 +248,7 @@ function PanelExcel({ periodo }) {
     const [mapeo, setMapeo]           = useState({});
     const [tieneEncabezado, setTieneEncabezado] = useState(true);
     const [importando, setImportando] = useState(false);
+    const [facultadId, setFacultadId] = useState('');
 
     useEffect(() => {
         if (preview?.auto_mapeo) {
@@ -273,7 +274,7 @@ function PanelExcel({ periodo }) {
         setImportando(true);
         router.post(
             `/analista/periodos/${periodo.id}/nominas/importar-excel`,
-            { path: preview.path, tiene_encabezado: tieneEncabezado, mapeo },
+            { path: preview.path, tiene_encabezado: tieneEncabezado, mapeo, facultad_id: facultadId || null },
             { onFinish: () => setImportando(false) }
         );
     }
@@ -288,6 +289,13 @@ function PanelExcel({ periodo }) {
             <p className="text-sm font-semibold text-gray-700">Importar Excel SAPD</p>
             <p className="text-xs text-gray-400">Formatos: .xlsx, .xls, .csv — máx. 5 MB</p>
 
+            <div className="flex gap-2 items-center">
+                <select value={facultadId} onChange={e => setFacultadId(e.target.value)}
+                    className="text-xs border border-gray-300 rounded px-2 py-1.5 text-gray-700 bg-white">
+                    <option value="">Facultad (opcional)</option>
+                    {(facultades ?? []).map(f => <option key={f.id} value={f.id}>{f.nombre}</option>)}
+                </select>
+            </div>
             <form onSubmit={subirArchivo} className="flex gap-2 items-center">
                 <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv"
                     className="text-xs text-gray-600 file:mr-2 file:text-xs file:border file:border-gray-300 file:rounded file:px-2 file:py-1 file:bg-gray-50 file:cursor-pointer"
@@ -656,7 +664,7 @@ export default function NominaCreate({ periodo, facultades, academicos, nominasE
                                 )}
                             </div>
                         </div>
-                        <PanelExcel periodo={periodo} />
+                        <PanelExcel periodo={periodo} facultades={facultades} />
                         <PanelColumnas periodo={periodo} columnasAdicionales={columnasAdicionales} />
                     </div>
 
