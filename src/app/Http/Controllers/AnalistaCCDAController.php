@@ -263,7 +263,7 @@ class AnalistaCCDAController extends Controller
                 ->with('error', 'Este expediente no está en evaluación CCDA.');
         }
 
-        $nomina->load(['academico.facultad', 'academico.departamento', 'compromisoApa', 'compromisos']);
+        $nomina->load(['academico.facultad', 'academico.departamento', 'compromisos']);
 
         $user      = auth()->user();
         $categorias = CategoriaApa::orderBy('orden')->get();
@@ -283,10 +283,9 @@ class AnalistaCCDAController extends Controller
             ];
         }
 
-        $categoria  = $nomina->categoriaEfectiva();
-        $compromiso = $nomina->compromisoApa;
-        $pesos      = CalificacionCadService::pesosDesdeCompromiso($compromiso, $categoria);
-        $sinCompromiso = !$compromiso || !$compromiso->estaConfirmado();
+        $categoria     = $nomina->categoriaEfectiva();
+        $pesos         = $nomina->pesosApa($categoria);
+        $sinCompromiso = $nomina->compromisos->filter(fn ($c) => $c->estaConfirmado())->isEmpty();
 
         $categoriasConPeso = $categorias->map(fn ($c) => [
             'id'     => $c->id,
@@ -342,7 +341,7 @@ class AnalistaCCDAController extends Controller
                 'sin_calificacion'        => (bool) $miEvaluacion->sin_calificacion,
                 'motivo_sc'               => $miEvaluacion->motivo_sc,
                 'comentario'              => $miEvaluacion->comentario,
-                'nota_final'              => $miEvaluacion->notaFinalCad($categoria, $compromiso),
+                'nota_final'              => $miEvaluacion->notaFinalCad($categoria, $pesos),
             ] : null,
             'calificacionFinal' => $calificacionFinalAp ? [
                 'nota_final'    => (float) $calificacionFinalAp->nota_final,

@@ -36,10 +36,10 @@ class Evaluacion extends Model
         ];
     }
 
-    public function notaFinalCad(?string $categoriaAcademica, ?CompromisoApa $compromiso = null): float
+    public function notaFinalCad(?string $categoriaAcademica, array|CompromisoApa|null $compromiso = null): float
     {
         if (!$compromiso && $this->relationLoaded('nomina')) {
-            $compromiso = $this->nomina->compromisoApa;
+            $compromiso = $this->nomina->pesosApa($categoriaAcademica);
         }
 
         return \App\Services\CalificacionCadService::calcularDesdeEvaluacion(

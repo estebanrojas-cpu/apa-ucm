@@ -214,10 +214,58 @@ class Nomina extends Model
         return $this->hasMany(CompromisoApa::class)->orderBy('semestre');
     }
 
-    /** Primer compromiso confirmado (para compatibilidad con CalificacionCadService) */
+    /** @deprecated Usar pesosApa() para evaluación; compromisoApa solo para display */
     public function compromisoApa(): HasOne
     {
         return $this->hasOne(CompromisoApa::class)->whereNotNull('confirmado_en')->orderBy('semestre');
+    }
+
+    /**
+     * Pesos APA ponderados por horas reales sumadas de todos los semestres confirmados.
+     * Si no hay compromisos confirmados, cae al reglamento por categoría.
+     *
+     * @return array<string, float>  claves: docencia, investigacion, vinculacion, gestion, formacion
+     */
+    public function pesosApa(?string $categoria = null): array
+    {
+        $confirmados = $this->compromisos->filter(fn ($c) => $c->estaConfirmado());
+
+        if ($confirmados->isEmpty()) {
+            return \App\Services\CalificacionCadService::pesosParaCategoria($categoria);
+        }
+
+        $areas    = ['docencia', 'investigacion', 'extension', 'administracion'];
+        $sumHoras = [];
+        foreach ($areas as $area) {
+            $sumHoras[$area] = (float) $confirmados->sum("hrs_{$area}");
+        }
+
+        $total = array_sum($sumHoras);
+        if ($total <= 0) {
+            return \App\Services\CalificacionCadService::pesosParaCategoria($categoria);
+        }
+
+        $mapa   = ['docencia' => 'docencia', 'investigacion' => 'investigacion', 'extension' => 'vinculacion', 'administracion' => 'gestion'];
+        $pesos  = ['formacion' => 0.0];
+        $suma   = 0.0;
+        $lastKey = null;
+
+        foreach ($mapa as $area => $key) {
+            if ($sumHoras[$area] > 0) {
+                $pct          = round($sumHoras[$area] / $total * 100, 2);
+                $pesos[$key]  = $pct;
+                $suma        += $pct;
+                $lastKey      = $key;
+            } else {
+                $pesos[$key] = 0.0;
+            }
+        }
+
+        if ($lastKey !== null) {
+            $pesos[$lastKey] = round(100 - ($suma - $pesos[$lastKey]), 2);
+        }
+
+        return $pesos;
     }
 
     public function calificacionFinal(): HasOne

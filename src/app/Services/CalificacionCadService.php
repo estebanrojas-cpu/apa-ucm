@@ -71,7 +71,7 @@ class CalificacionCadService
         return round(min($suma + $extra, 5.0), 2);
     }
 
-    public static function calcularDesdeEvaluacion(object $evaluacion, ?string $categoriaAcademica, ?\App\Models\CompromisoApa $compromiso = null): float
+    public static function calcularDesdeEvaluacion(object $evaluacion, ?string $categoriaAcademica, array|\App\Models\CompromisoApa|null $compromiso = null): float
     {
         if (!empty($evaluacion->sin_calificacion)) {
             return 0.0;
@@ -83,12 +83,11 @@ class CalificacionCadService
         }
 
         $extra = (float) ($evaluacion->extra_otras_actividades ?? 0.0);
+        $pesos = is_array($compromiso)
+            ? $compromiso
+            : self::pesosDesdeCompromiso($compromiso, $categoriaAcademica);
 
-        return self::calcularNotaFinal(
-            $notas,
-            self::pesosDesdeCompromiso($compromiso, $categoriaAcademica),
-            $extra
-        );
+        return self::calcularNotaFinal($notas, $pesos, $extra);
     }
 
     public static function vigenteHasta(?string $categoria): \Carbon\Carbon
