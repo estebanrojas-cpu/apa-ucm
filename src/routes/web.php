@@ -102,6 +102,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/dashboard',                                             [DashboardController::class,  'cca'])->name('cca.dashboard');
         Route::get('/expedientes',                                           [EvaluacionController::class, 'index'])->name('cca.expedientes');
         Route::get('/expedientes/{nomina}',                                  [EvaluacionController::class, 'show'])->name('cca.expedientes.show');
+        Route::get('/expedientes/{nomina}/categoria/{categoria}',            [EvaluacionController::class, 'showCategoria'])->name('cca.expedientes.categoria');
         Route::post('/expedientes/{nomina}/evaluar',                         [EvaluacionController::class, 'store'])->name('cca.expedientes.evaluar');
         Route::post('/expedientes/{nomina}/finalizar',                       [EvaluacionController::class, 'finalize'])->name('cca.expedientes.finalizar');
         Route::get('/expedientes/{nomina}/evidencias/{evidencia}/descargar',      [EvaluacionController::class, 'downloadEvidencia'])->name('cca.evidencias.download');
@@ -139,10 +140,6 @@ Route::middleware('auth')->group(function () {
         Route::delete('/evidencias/{evidencia}',                   [EvidenciaController::class, 'destroy'])->name('academico.evidencias.destroy');
         Route::post('/evidencias-apelacion',                       [EvidenciaController::class, 'storeApelacion'])->name('academico.evidencias.apelacion.store');
         Route::delete('/evidencias-apelacion/{evidencia}',         [EvidenciaController::class, 'destroyApelacion'])->name('academico.evidencias.apelacion.destroy');
-    });
-
-    Route::middleware('role:rrhh')->prefix('rrhh')->group(function () {
-        Route::get('/dashboard', [DashboardController::class, 'rrhh'])->name('rrhh.dashboard');
     });
 
     Route::middleware('role:academico')->get('/academico/bloqueado', fn () => inertia('Academico/BloqueadoLicencia'))

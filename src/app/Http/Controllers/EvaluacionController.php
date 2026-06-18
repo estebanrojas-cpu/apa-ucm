@@ -114,7 +114,7 @@ class EvaluacionController extends Controller
                 ->with('error', 'La evaluación se habilita cuando cierre la validación del secretario ('.$etapaCarga->fecha_fin->format('d/m/Y').').');
         }
 
-        $nomina->load(['academico.facultad', 'academico.departamento', 'compromisoApa', 'compromisos']);
+        $nomina->load(['academico.facultad', 'academico.departamento', 'compromisos']);
 
         $apelacion   = $nomina->apelacion;
         $esApelacion = $apelacion && $apelacion->estado === 'resuelta'
@@ -127,21 +127,12 @@ class EvaluacionController extends Controller
 
         $categorias = CategoriaApa::orderBy('orden')->get();
         $evidencias = $esApelacion
-            ? $nomina->evidenciasApelacion()->with('categoria')->get()
-            : $nomina->evidenciasNormales()->with('categoria')->get();
+            ? $nomina->evidenciasApelacion()->get()
+            : $nomina->evidenciasNormales()->get();
 
-        $evidenciasPorCategoria = [];
+        $conteoEvidencias = [];
         foreach ($evidencias as $ev) {
-            $evidenciasPorCategoria[$ev->categoria_id][] = [
-                'id'             => $ev->id,
-                'nombre_archivo' => $ev->nombre_archivo,
-                'tamano'         => $ev->tamanoFormateado(),
-                'descripcion'    => $ev->descripcion,
-                'created_at'     => $ev->created_at->format('d/m/Y H:i'),
-                'mime_type'      => $ev->mime_type,
-                'url_descarga'   => route('cca.evidencias.download', [$nomina->id, $ev->id]),
-                'url_preview'    => route('cca.evidencias.preview',  [$nomina->id, $ev->id]),
-            ];
+            $conteoEvidencias[$ev->categoria_id] = ($conteoEvidencias[$ev->categoria_id] ?? 0) + 1;
         }
 
         $miEvaluacion = Evaluacion::where('nomina_id', $nomina->id)
@@ -150,10 +141,9 @@ class EvaluacionController extends Controller
             ->first();
 
         $academico  = $nomina->academico;
-        $categoria  = $nomina->categoriaEfectiva();
-        $compromiso = $nomina->compromisoApa;
-        $pesos      = CalificacionCadService::pesosDesdeCompromiso($compromiso, $categoria);
-        $sinCompromiso = !$compromiso || !$compromiso->estaConfirmado();
+        $categoria     = $nomina->categoriaEfectiva();
+        $pesos         = $nomina->pesosApa($categoria);
+        $sinCompromiso = $nomina->compromisos->filter(fn ($c) => $c->estaConfirmado())->isEmpty();
 
         $categoriasConPeso = $categorias->map(fn ($c) => [
             'id'     => $c->id,
@@ -168,7 +158,7 @@ class EvaluacionController extends Controller
             ->get()
             ->map(fn ($e) => [
                 'evaluador'     => $e->evaluador->name,
-                'nota_final'    => $e->notaFinalCad($categoria, $compromiso),
+                'nota_final'    => $e->notaFinalCad($categoria, $pesos),
             ]);
 
         $calificacionFinal = $esApelacion
@@ -198,7 +188,7 @@ class EvaluacionController extends Controller
             ],
             'categorias'             => $categoriasConPeso,
             'pesosReglamento'        => $pesos,
-            'evidenciasPorCategoria' => $evidenciasPorCategoria,
+            'conteoEvidencias'       => $conteoEvidencias,
             'miEvaluacion'           => $miEvaluacion ? [
                 'puntaje_docencia'         => (float) $miEvaluacion->puntaje_docencia,
                 'puntaje_investigacion'    => (float) $miEvaluacion->puntaje_investigacion,
@@ -209,7 +199,7 @@ class EvaluacionController extends Controller
                 'sin_calificacion'         => (bool) $miEvaluacion->sin_calificacion,
                 'motivo_sc'                => $miEvaluacion->motivo_sc,
                 'comentario'               => $miEvaluacion->comentario,
-                'nota_final'               => $miEvaluacion->notaFinalCad($categoria, $compromiso),
+                'nota_final'               => $miEvaluacion->notaFinalCad($categoria, $pesos),
                 'fecha'                    => $miEvaluacion->updated_at->format('d/m/Y H:i'),
                 'evaluador'                => $user->name,
             ] : null,
@@ -234,6 +224,52 @@ class EvaluacionController extends Controller
                     'pct_administracion'=> (float) $c->pct_administracion,
                     'pct_otras'         => (float) $c->pct_otras,
                 ])->values(),
+        ]);
+    }
+
+    public function showCategoria(Nomina $nomina, CategoriaApa $categoria): Response
+    {
+        $user = auth()->user();
+
+        if ($nomina->academico->facultad_id !== $user->facultad_id) {
+            abort(403);
+        }
+
+        $apelacion   = $nomina->apelacion;
+        $esApelacion = $apelacion && $apelacion->estado === 'resuelta'
+                       && !$nomina->calificacionFinal()->where('es_apelacion', true)->exists();
+
+        if ($esApelacion && ($apelacion->destino ?? 'cca') === 'ccda') {
+            abort(403, 'Esta apelación corresponde al nivel CCDA.');
+        }
+
+        $mapEv = fn ($ev) => [
+            'id'             => $ev->id,
+            'nombre_archivo' => $ev->nombre_archivo,
+            'tamano'         => $ev->tamanoFormateado(),
+            'descripcion'    => $ev->descripcion,
+            'mime_type'      => $ev->mime_type,
+            'created_at'     => $ev->created_at->format('d/m/Y H:i'),
+            'url_descarga'   => route('cca.evidencias.download', [$nomina->id, $ev->id]),
+            'url_preview'    => route('cca.evidencias.preview',  [$nomina->id, $ev->id]),
+        ];
+
+        $evidencias = $esApelacion
+            ? $nomina->evidenciasApelacion()->where('categoria_id', $categoria->id)->get()
+            : $nomina->evidenciasNormales()->where('categoria_id', $categoria->id)->get();
+
+        return Inertia::render('CCA/ExpedienteCategoria', [
+            'nomina'      => [
+                'id'     => $nomina->id,
+                'nombre' => $nomina->academico->name,
+            ],
+            'categoria'   => [
+                'id'          => $categoria->id,
+                'nombre'      => $categoria->nombre,
+                'descripcion' => $categoria->descripcion,
+            ],
+            'esApelacion' => $esApelacion,
+            'evidencias'  => $evidencias->map($mapEv)->values(),
         ]);
     }
 
@@ -333,9 +369,9 @@ class EvaluacionController extends Controller
             ->where('es_apelacion', $esApelacion)
             ->first();
 
-        $categoria  = $nomina->categoriaEfectiva();
-        $compromiso = CompromisoApa::where('nomina_id', $nomina->id)->first();
-        $notaFinal  = $evaluacion->notaFinalCad($categoria, $compromiso);
+        $categoria = $nomina->categoriaEfectiva();
+        $nomina->loadMissing('compromisos');
+        $notaFinal = $evaluacion->notaFinalCad($categoria, $nomina->pesosApa($categoria));
         $concepto  = CalificacionCadService::labelConcepto(
             CalificacionCadService::conceptoDesdeNota($notaFinal)
         );
@@ -371,10 +407,10 @@ class EvaluacionController extends Controller
         }
 
         $esApelacion = $calificacion->es_apelacion;
-        $nomina->load(['academico.facultad', 'academico.departamento', 'compromisoApa']);
-        $academico  = $nomina->academico;
-        $categoria  = $nomina->categoriaEfectiva();
-        $pesos      = CalificacionCadService::pesosDesdeCompromiso($nomina->compromisoApa, $categoria);
+        $nomina->load(['academico.facultad', 'academico.departamento', 'compromisos']);
+        $academico = $nomina->academico;
+        $categoria = $nomina->categoriaEfectiva();
+        $pesos     = $nomina->pesosApa($categoria);
         $categorias = CategoriaApa::orderBy('orden')->get();
 
         $evaluaciones = Evaluacion::with('evaluador')
