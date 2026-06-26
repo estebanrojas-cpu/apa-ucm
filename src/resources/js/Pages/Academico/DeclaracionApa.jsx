@@ -45,7 +45,7 @@ function calcularPorcentajes(horas, decimales = 2) {
 }
 
 export default function DeclaracionApa({
-    periodo, nomina, semestre, semestreLabel, yaDeclarado, fechaCierre, datos, config,
+    periodo, nomina, semestre, semestreLabel, yaDeclarado, fechaCierre, datos, config, soloRegistro, cicloEvaluacion,
 }) {
     const { flash }  = usePage().props;
     const decimales      = config?.decimales_pct  ?? 2;
@@ -126,6 +126,13 @@ export default function DeclaracionApa({
                             <span className="font-semibold text-gray-700">{horasContrato} h</span>{' '}
                             según tu contrato. El porcentaje se calcula automáticamente.
                         </p>
+                        {soloRegistro && (
+                            <p className="text-sm text-blue-700 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 mt-3">
+                                Este período solo registra su declaración APA. La evaluación formal corresponde
+                                al cierre de su ciclo ({cicloEvaluacion?.semestres ?? 4} semestres
+                                · {cicloEvaluacion?.horas ?? '—'} h acumuladas).
+                            </p>
+                        )}
 
                         {yaDeclarado ? (
                             <div className="mt-6 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">

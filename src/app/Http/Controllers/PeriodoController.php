@@ -7,6 +7,7 @@ use App\Jobs\EnviarInicioProcesoJob;
 use App\Models\Cronograma;
 use App\Models\Notificacion;
 use App\Models\Periodo;
+use App\Models\SemestreAcademico;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -17,11 +18,23 @@ class PeriodoController extends Controller
 {
     public function index(): Response
     {
-        $periodos = Periodo::with(['creadoPor', 'cronogramas'])
+        $periodos = Periodo::with(['creadoPor', 'cronogramas', 'semestres'])
             ->withCount('nominas')
             ->orderByDesc('anio')
             ->orderByDesc('created_at')
-            ->get();
+            ->get()
+            ->map(function (Periodo $p) {
+                $s1 = $p->semestres->firstWhere('numero', 1);
+                $s2 = $p->semestres->firstWhere('numero', 2);
+
+                return array_merge($p->toArray(), [
+                    'semestres_apa' => [
+                        's1' => $s1?->fecha_cierre?->format('Y-m-d'),
+                        's2' => $s2?->fecha_cierre?->format('Y-m-d'),
+                        'completo' => $s1?->fecha_cierre && $s2?->fecha_cierre,
+                    ],
+                ]);
+            });
 
         return Inertia::render('Periodo/Index', [
             'periodos' => $periodos,
@@ -61,6 +74,18 @@ class PeriodoController extends Controller
                     'fecha_fin'    => $entry['fecha_fin'],
                 ]);
             }
+
+            SemestreAcademico::create([
+                'periodo_id'   => $periodo->id,
+                'numero'       => 1,
+                'fecha_cierre' => $data['fecha_cierre_s1'],
+            ]);
+
+            SemestreAcademico::create([
+                'periodo_id'   => $periodo->id,
+                'numero'       => 2,
+                'fecha_cierre' => $data['fecha_cierre_s2'],
+            ]);
 
             $this->notificarInicio($periodo);
         });

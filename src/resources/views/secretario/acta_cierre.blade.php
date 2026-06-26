@@ -144,12 +144,22 @@
         .firma-section {
             margin-top: 50px;
             display: flex;
-            gap: 50px;
+            gap: 30px;
+            flex-wrap: wrap;
         }
 
         .firma-box {
             flex: 1;
+            min-width: 140px;
             text-align: center;
+        }
+
+        .firma-name {
+            font-size: 11px;
+            font-weight: bold;
+            color: #222;
+            margin-bottom: 28px;
+            min-height: 14px;
         }
 
         .firma-line {
@@ -277,7 +287,9 @@
                     'deficiente' => 'badge-deficiente',
                     default      => 'badge-sin-calif',
                 };
-                $labelCalif = match($n['calificacion'] ?? '') {
+                $labelCalif = ($n['da_conocer'] ?? false)
+                    ? 'Se da a conocer'
+                    : match($n['calificacion'] ?? '') {
                     'excelente'  => 'Excelente',
                     'muy_bueno'  => 'Muy Bueno',
                     'bueno'      => 'Bueno',
@@ -305,21 +317,38 @@
     </table>
 </div>
 
-{{-- Firma --}}
+{{-- Firmas --}}
 <div class="firma-section">
     <div class="firma-box">
+        <p class="firma-name">{{ $secretario->name }}</p>
         <div class="firma-line"></div>
         <p class="firma-label">Secretario/a de Facultad</p>
     </div>
+
+    @foreach ($miembrosCca as $miembro)
     <div class="firma-box">
+        <p class="firma-name">{{ $miembro->name }}</p>
         <div class="firma-line"></div>
-        <p class="firma-label">Presidente de la CCA</p>
+        <p class="firma-label">Miembro CCA</p>
     </div>
+    @endforeach
+
+    @if ($miembrosCca->isEmpty())
     <div class="firma-box">
+        <p class="firma-name">&nbsp;</p>
+        <div class="firma-line"></div>
+        <p class="firma-label">Miembro CCA</p>
+    </div>
+    @endif
+
+    <div class="firma-box">
+        <p class="firma-name">{{ $decano?->name ?? '' }}</p>
         <div class="firma-line"></div>
         <p class="firma-label">Decano/a de Facultad</p>
     </div>
+
     <div class="firma-box">
+        <p class="firma-name">&nbsp;</p>
         <div class="firma-line"></div>
         <p class="firma-label">Timbre y Fecha</p>
     </div>

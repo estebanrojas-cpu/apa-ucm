@@ -47,6 +47,9 @@ class EvidenciaController extends Controller
         }
 
         $puedeCargar = $nomina && $nomina->cargaEvidenciasHabilitada();
+        $motivoBloqueoCarga = $nomina && !$puedeCargar
+            ? $nomina->motivoBloqueoCargaEvidencias()
+            : null;
 
         $apelacionEtapaVigente = $periodo ? Cronograma::where('periodo_id', $periodo->id)
             ->where('etapa', 'apelaciones')
@@ -72,6 +75,7 @@ class EvidenciaController extends Controller
             ] : null,
             'plazo'                  => $plazo,
             'puedeCargar'            => $puedeCargar,
+            'motivoBloqueoCarga'     => $motivoBloqueoCarga,
             'puedeCargarApelacion'   => $puedeCargarApelacion,
             'apelacionEtapaVigente'  => $apelacionEtapaVigente,
             'apelacion'              => $apelacion ? [

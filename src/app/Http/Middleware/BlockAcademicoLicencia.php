@@ -13,7 +13,7 @@ class BlockAcademicoLicencia
     {
         $user = $request->user();
 
-        if ($user && $user->role === 'academico' && $user->tieneLicenciaMedicaActiva()) {
+        if ($user && $user->activeRole() === 'academico' && $user->tieneLicenciaMedicaActiva()) {
             if ($request->routeIs('logout') || $request->routeIs('academico.bloqueado')) {
                 return $next($request);
             }

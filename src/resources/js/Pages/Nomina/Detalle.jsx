@@ -11,9 +11,12 @@ function Campo({ label, value }) {
 }
 
 export default function NominaDetalle({ periodo, nomina, historial_calificaciones, historial_categorias }) {
-    const vigenciaColor = nomina.nota_vigente_activa
-        ? 'bg-green-50 border-green-200 text-green-800'
-        : 'bg-gray-50 border-gray-200 text-gray-600';
+    const esDaConocer = nomina.es_solo_da_conocer;
+    const vigenciaColor = esDaConocer
+        ? 'bg-blue-50 border-blue-200 text-blue-900'
+        : nomina.nota_vigente_activa
+            ? 'bg-green-50 border-green-200 text-green-800'
+            : 'bg-gray-50 border-gray-200 text-gray-600';
 
     return (
         <>
@@ -52,10 +55,49 @@ export default function NominaDetalle({ periodo, nomina, historial_calificacione
                         </div>
                     </div>
 
-                    {/* ── Nota vigente ── */}
+                    {/* ── Nota vigente / Se da a conocer (decano/a) ── */}
                     <div className={`rounded-xl border p-5 ${vigenciaColor}`}>
-                        <h2 className="text-sm font-semibold mb-3">Nota vigente</h2>
-                        {nomina.nota_vigente ? (
+                        <h2 className="text-sm font-semibold mb-3">
+                            {esDaConocer ? 'Se da a conocer' : 'Nota vigente'}
+                        </h2>
+                        {esDaConocer ? (
+                            nomina.nota_vigente ? (
+                                <div className="space-y-4">
+                                    <div className="flex flex-wrap items-center gap-6">
+                                        <div>
+                                            <p className="text-xs opacity-70 mb-0.5">Última calificación conocida</p>
+                                            <p className="text-2xl font-bold">{Number(nomina.nota_vigente).toFixed(2)}</p>
+                                        </div>
+                                        {nomina.concepto_nota && (
+                                            <div>
+                                                <p className="text-xs opacity-70 mb-0.5">Concepto</p>
+                                                <p className="text-sm font-medium">{nomina.concepto_nota}</p>
+                                            </div>
+                                        )}
+                                        {nomina.anio_ultima_calificacion && (
+                                            <div>
+                                                <p className="text-xs opacity-70 mb-0.5">Año del proceso</p>
+                                                <p className="text-sm font-medium">{nomina.anio_ultima_calificacion}</p>
+                                            </div>
+                                        )}
+                                        <div>
+                                            <p className="text-xs opacity-70 mb-0.5">Modalidad en este período</p>
+                                            <p className="text-sm font-medium">Se da a conocer</p>
+                                        </div>
+                                    </div>
+                                    <p className="text-sm opacity-80">
+                                        No participa del proceso evaluativo del período vigente por ejercer el cargo de{' '}
+                                        {nomina.nombre_posicion || 'decano/a de facultad'}. La nota mostrada corresponde
+                                        a su última calificación como académico evaluable.
+                                    </p>
+                                </div>
+                            ) : (
+                                <p className="text-sm opacity-70">
+                                    Sin calificación previa registrada. En este período solo se da a conocer su situación
+                                    por ejercer el cargo de {nomina.nombre_posicion || 'decano/a de facultad'}.
+                                </p>
+                            )
+                        ) : nomina.nota_vigente ? (
                             <div className="flex flex-wrap items-center gap-6">
                                 <div>
                                     <p className="text-xs opacity-70 mb-0.5">Nota</p>

@@ -4,7 +4,6 @@ namespace App\Enums;
 
 enum RoleEnum: string
 {
-    case Admin         = 'admin';
     case AnalistaCCDA  = 'analista_ccda';
     case Secretario    = 'secretario';
     case MiembroCCA    = 'miembro_cca';
@@ -15,7 +14,6 @@ enum RoleEnum: string
     public function label(): string
     {
         return match($this) {
-            self::Admin         => 'Administrador',
             self::AnalistaCCDA  => 'Analista CCDA',
             self::Secretario    => 'Secretario',
             self::MiembroCCA    => 'Miembro CCA',
@@ -28,7 +26,7 @@ enum RoleEnum: string
     /** Roles con acceso institucional (sin restricción de facultad). */
     public static function nivelInstitucional(): array
     {
-        return [self::Admin, self::AnalistaCCDA, self::Vicerrectora];
+        return [self::AnalistaCCDA, self::Vicerrectora];
     }
 
     /** Roles acotados a una facultad. */

@@ -27,7 +27,7 @@ function ModalAgregarAcademico({ periodo, facultades, onClose }) {
                     <h3 className="text-sm font-semibold text-gray-800">Agregar académico</h3>
                     <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-lg leading-none">×</button>
                 </div>
-                <p className="text-xs text-gray-500">Si el RUT ya existe en el sistema, se usará el usuario existente.</p>
+                <p className="text-xs text-gray-500">Solo se agrega a la nómina. La cuenta se crea cuando comunica el acceso por correo.</p>
                 <form onSubmit={submit} className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
                         {[
@@ -479,7 +479,7 @@ function NominaGrid({ nominasEnPeriodo, periodo, columnasAdicionales, onEditar }
     }
 
     const fixedHeaders = ['N° Personal', 'RUT', 'Nombre', 'Unidad Superior', 'Unidad',
-                          'Posición', 'Tipo', 'Fecha Ctto.', 'Horas', 'Categoría', 'Fecha Categ.'];
+                          'Posición', 'Tipo', 'Fecha Ctto.', 'Horas', 'Categoría', 'Fecha Categ.', 'Acceso'];
     const allHeaders   = [...fixedHeaders, ...columnasAdicionales, 'Estado', ''];
 
     return (
@@ -529,6 +529,17 @@ function NominaGrid({ nominasEnPeriodo, periodo, columnasAdicionales, onEditar }
                                         {n.categoria ? n.categoria.charAt(0).toUpperCase() + n.categoria.slice(1) : '—'}
                                     </td>
                                     <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{n.fecha_categorizacion ? formatDate(n.fecha_categorizacion) : '—'}</td>
+                                    <td className="px-3 py-2 whitespace-nowrap">
+                                        {n.tiene_cuenta ? (
+                                            <span className="text-[10px] font-medium text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">
+                                                Acceso enviado
+                                            </span>
+                                        ) : (
+                                            <span className="text-[10px] font-medium text-gray-500 bg-gray-100 border border-gray-200 px-2 py-0.5 rounded-full">
+                                                Sin cuenta
+                                            </span>
+                                        )}
+                                    </td>
 
                                     {/* Columnas personalizadas */}
                                     {columnasAdicionales.map(col => (
@@ -573,11 +584,12 @@ export default function NominaCreate({ periodo, facultades, academicos, nominasE
     const [enviandoAcceso, setEnviandoAcceso] = useState(false);
 
     const totalLicencias      = nominasEnPeriodo.filter(n => n.con_licencia).length;
+    const sinCuenta           = nominasEnPeriodo.filter(n => !n.tiene_cuenta).length;
     const columnasAdicionales = columnas_adicionales ?? [];
 
     function handleEnviarAcceso() {
         if (nominasEnPeriodo.length === 0) return;
-        if (!confirm(`¿Enviar link de acceso a los ${nominasEnPeriodo.length} académico(s) de esta nómina?\n\nCada uno recibirá un correo para establecer su contraseña.`)) return;
+        if (!confirm(`¿Comunicar acceso a las ${nominasEnPeriodo.length} persona(s) de esta nómina?\n\nEl sistema creará su cuenta (si aún no existe), asignará sus perfiles según el cargo en nómina y enviará un correo con usuario y contraseña inicial.\n\nHasta que usted ejecute esta acción, no podrán ingresar al sistema.`)) return;
         setEnviandoAcceso(true);
         router.post(
             `/analista/periodos/${periodo.id}/nominas/enviar-credenciales`,
@@ -637,6 +649,13 @@ export default function NominaCreate({ periodo, facultades, academicos, nominasE
                     </div>
                 )}
 
+                {nominasEnPeriodo.length > 0 && sinCuenta > 0 && (
+                    <div className="mb-5 rounded-lg bg-blue-50 border border-blue-200 px-4 py-3 text-sm text-blue-900">
+                        <strong>Creación de cuentas:</strong> hay {sinCuenta} persona(s) en nómina sin acceso al sistema.
+                        Use <strong>Comunicar acceso</strong> para crear sus cuentas, asignar perfiles y enviar credenciales por correo.
+                    </div>
+                )}
+
                 <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                     <div className="space-y-5">
                         <div className="bg-white rounded-xl border border-gray-200 p-5">
@@ -656,6 +675,12 @@ export default function NominaCreate({ periodo, facultades, academicos, nominasE
                                         <span className="text-sm font-semibold text-amber-600">{totalLicencias}</span>
                                     </div>
                                 )}
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm text-gray-500">Sin cuenta aún</span>
+                                    <span className={`text-sm font-semibold ${sinCuenta > 0 ? 'text-amber-600' : 'text-green-600'}`}>
+                                        {sinCuenta}
+                                    </span>
+                                </div>
                                 {columnasAdicionales.length > 0 && (
                                     <div className="flex items-center justify-between">
                                         <span className="text-sm text-gray-500">Cols. extra</span>

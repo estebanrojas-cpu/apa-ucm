@@ -41,18 +41,17 @@ export default function AnalistaCCDA({ stats }) {
                         external
                     />
                     <ActionCard
-                        title="Apelaciones CCDA"
-                        description="Expedientes con calificación Regular/Deficiente derivados al 2do nivel de revisión."
-                        href="/analista/apelaciones"
-                        linkLabel="Ver apelaciones"
-                    />
-                    <ActionCard
                         title="Registro CCDA"
                         description="Verificación por facultad del proceso completo antes de enviar a Vicerrectoría."
                         href="/analista/registro-ccda"
                         linkLabel="Ver registro"
                     />
                 </div>
+
+                <p className="text-xs text-gray-400 mt-6">
+                    Desde <Link href="/analista/periodos" className="text-[#0096D6] hover:underline">Períodos</Link> gestione
+                    nómina y comisión evaluadora. Los semestres APA se definen al registrar el período.
+                </p>
 
             </AppLayout>
         </>

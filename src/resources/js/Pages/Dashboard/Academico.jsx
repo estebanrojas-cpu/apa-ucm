@@ -35,7 +35,7 @@ function getApelacionInfo(ap) {
     return apelacionEstadosBase[ap.estado] ?? { label: ap.estado, cls: 'bg-gray-50 border-gray-200 text-gray-800' };
 }
 
-export default function Academico({ stats, periodo }) {
+export default function Academico({ stats, periodo, compromisoApa }) {
     const { flash } = usePage().props;
     const estado             = estadoLabels[stats?.estado_nomina];
     const calificacion       = stats?.calificacion ?? null;
@@ -146,19 +146,54 @@ export default function Academico({ stats, periodo }) {
                     </div>
                 )}
 
+                {compromisoApa && (
+                    <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6 space-y-4">
+                        <div>
+                            <h2 className="font-semibold text-gray-800">Compromiso APA por semestre</h2>
+                            <p className="text-sm text-gray-500 mt-1">
+                                Declare las horas de cada área por semestre.
+                                {compromisoApa.participa_evaluacion
+                                    ? ' Debe completar I y II Semestre antes de cargar evidencias.'
+                                    : ` Este período es solo registro (evaluación cada ${compromisoApa.ciclo_semestres} semestres).`}
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <SemestreApaCard
+                                label="I Semestre"
+                                cierre={compromisoApa.s1.cierre}
+                                confirmado={compromisoApa.s1.confirmado}
+                                href="/academico/declaracion-apa/S1"
+                                disponible
+                            />
+                            <SemestreApaCard
+                                label="II Semestre"
+                                cierre={compromisoApa.s2.cierre}
+                                confirmado={compromisoApa.s2.confirmado}
+                                href="/academico/declaracion-apa/S2"
+                                disponible={compromisoApa.s2.disponible}
+                                bloqueadoMsg="Disponible cuando cierre el I Semestre"
+                            />
+                        </div>
+                    </div>
+                )}
+
                 <div className="bg-white rounded-xl border border-gray-200 p-6 flex items-center justify-between">
                     <div>
                         <h2 className="font-semibold text-gray-800">Carga de evidencias</h2>
                         <p className="text-sm text-gray-500 mt-1">
-                            Suba sus documentos por categoría APA para el período activo.
+                            {compromisoApa?.participa_evaluacion === false
+                                ? 'No aplica este período: su categoría solo registra la declaración APA semestral.'
+                                : 'Suba sus documentos por categoría APA para el período activo.'}
                         </p>
                     </div>
-                    <Link
-                        href="/academico/evidencias"
-                        className="px-4 py-2 bg-[#1B2D6B] text-white text-sm font-medium rounded-lg hover:bg-[#152558] transition-colors shrink-0 ml-4"
-                    >
-                        Ir a evidencias
-                    </Link>
+                    {compromisoApa?.participa_evaluacion !== false && (
+                        <Link
+                            href="/academico/evidencias"
+                            className="px-4 py-2 bg-[#1B2D6B] text-white text-sm font-medium rounded-lg hover:bg-[#152558] transition-colors shrink-0 ml-4"
+                        >
+                            Ir a evidencias
+                        </Link>
+                    )}
                 </div>
 
             </AppLayout>
@@ -171,6 +206,32 @@ function StatCard({ label, value }) {
         <div className="bg-white rounded-xl border border-gray-200 p-5">
             <p className="text-sm text-gray-500">{label}</p>
             <div className="text-2xl font-bold text-gray-900 mt-1">{value}</div>
+        </div>
+    );
+}
+
+function SemestreApaCard({ label, cierre, confirmado, href, disponible, bloqueadoMsg }) {
+    return (
+        <div className={`rounded-lg border p-4 ${confirmado ? 'border-green-200 bg-green-50/50' : 'border-gray-200'}`}>
+            <div className="flex items-start justify-between gap-2">
+                <div>
+                    <p className="text-sm font-semibold text-gray-800">{label}</p>
+                    {cierre && <p className="text-xs text-gray-500 mt-0.5">Cierre: {cierre}</p>}
+                </div>
+                {confirmado ? (
+                    <span className="text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">Confirmado</span>
+                ) : (
+                    <span className="text-xs font-medium text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full">Pendiente</span>
+                )}
+            </div>
+            {!confirmado && disponible && (
+                <Link href={href} className="inline-block mt-3 text-sm font-medium text-[#1B2D6B] hover:underline">
+                    Declarar compromiso →
+                </Link>
+            )}
+            {!confirmado && !disponible && bloqueadoMsg && (
+                <p className="text-xs text-gray-400 mt-3">{bloqueadoMsg}</p>
+            )}
         </div>
     );
 }

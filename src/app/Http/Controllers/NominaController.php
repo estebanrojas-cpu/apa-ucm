@@ -12,6 +12,7 @@ use App\Models\Periodo;
 use App\Models\User;
 use Carbon\Carbon;
 use App\Mail\CredencialesAcademicoMail;
+use App\Services\NominaAccesoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +27,7 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 
 class NominaController extends Controller
 {
+    public function __construct(private NominaAccesoService $acceso) {}
     // ── Mapeo canónico de encabezados SAPD → campo de nómina ─────────────────
     private const HEADER_MAP = [
         'n_personal'                  => 'numero_personal',
@@ -155,6 +157,7 @@ class NominaController extends Controller
                 'numero_personal'      => $n->numero_personal,
                 'rut'                  => $n->rut      ?? $n->academico?->rut,
                 'nombre'               => $n->nombre   ?? $n->academico?->name,
+                'tiene_cuenta'         => $n->user_id !== null,
                 'adscripcion_academica'=> $n->adscripcion_academica,
                 'unidad_superior'      => $n->unidad_superior,
                 'unidad'               => $n->unidad,
@@ -373,40 +376,22 @@ class NominaController extends Controller
                 $camposNomina['datos_adicionales'] = $adicionales;
             }
 
-            // Crear o enlazar usuario
-            $user = User::where('rut', $rut)->first();
+            $userExistente = User::where('rut', $rut)->first();
 
-            if (!$user) {
-                $email = $this->resolveEmail($this->buildEmailFromNombre($nombre));
-
-                $horasSem = 40;
-
-                $user = User::create([
-                    'name'                  => $nombre,
-                    'rut'                   => $rut,
-                    'email'                 => $email,
-                    'password'              => Hash::make($this->buildPasswordFromRut($rut)),
-                    'role'                  => 'academico',
-                    'facultad_id'           => $data['facultad_id'] ?? null,
-                    'horas_contrato_isem'   => $horasSem,
-                    'horas_contrato_iisem'  => $horasSem,
-                ]);
-            } elseif (!$user->facultad_id && !empty($data['facultad_id'])) {
-                $user->update(['facultad_id' => $data['facultad_id']]);
-            }
-
-            // Crear o actualizar nómina
             $nomina = Nomina::where('periodo_id', $periodo->id)
-                ->where('user_id', $user->id)
+                ->where('rut', $rut)
                 ->first();
 
             if ($nomina) {
-                $nomina->update($camposNomina);
+                $nomina->update(array_merge($camposNomina, [
+                    'facultad_id' => $data['facultad_id'] ?? $nomina->facultad_id,
+                    'user_id'     => $nomina->user_id ?? $userExistente?->id,
+                ]));
                 $omitidos++;
             } else {
                 $nomina = Nomina::create(array_merge($camposNomina, [
                     'periodo_id'   => $periodo->id,
-                    'user_id'      => $user->id,
+                    'user_id'      => $userExistente?->id,
                     'facultad_id'  => $data['facultad_id'] ?? null,
                     'estado'       => 'pendiente',
                     'con_licencia' => false,
@@ -434,31 +419,37 @@ class NominaController extends Controller
         $nominas = Nomina::where('periodo_id', $periodo->id)->with('academico')->get();
 
         $enviados    = 0;
+        $creados     = 0;
         $errores     = 0;
         $ultimoError = null;
 
         foreach ($nominas as $nomina) {
-            $user = $nomina->academico;
-            if (!$user || !$user->email) {
+            if (!$nomina->rut || !$nomina->nombre) {
                 $errores++;
                 continue;
             }
-
-            $password = $this->buildPasswordFromRut($user->rut ?? '');
-            if (!$password) {
-                $errores++;
-                continue;
-            }
-
-            // Restablece contraseña inicial (idempotente: siempre el mismo valor derivado del RUT)
-            $user->password = Hash::make($password);
-            $user->save();
 
             try {
+                $eraNuevo = !$nomina->user_id;
+                $user     = $this->acceso->provisionarUsuario($nomina);
+                $password = $this->acceso->passwordDesdeRut($user->rut ?? '');
+
+                if (!$password) {
+                    $errores++;
+                    continue;
+                }
+
+                $user->password = $password;
+                $user->save();
+
                 Mail::to($user->email)->send(
                     new CredencialesAcademicoMail($user->name, $user->email, $password)
                 );
+
                 $enviados++;
+                if ($eraNuevo) {
+                    $creados++;
+                }
             } catch (\Throwable $e) {
                 $errores++;
                 $ultimoError ??= $e->getMessage();
@@ -466,10 +457,15 @@ class NominaController extends Controller
         }
 
         if ($enviados === 0 && $errores > 0) {
-            return back()->with('error', "No se pudo enviar ningún correo. Error: " . ($ultimoError ?? 'desconocido'));
+            return back()->with('error', 'No se pudo enviar ningún correo. Error: ' . ($ultimoError ?? 'desconocido'));
         }
 
-        $msg = "Credenciales enviadas a {$enviados} académico(s).";
+        $msg = "Acceso comunicado a {$enviados} persona(s) de la nómina.";
+        if ($creados > 0) {
+            $msg .= " Se crearon {$creados} cuenta(s) con sus perfiles; las credenciales fueron enviadas por correo.";
+        } else {
+            $msg .= " Las credenciales fueron reenviadas por correo.";
+        }
         if ($errores) {
             $msg .= " {$errores} no pudieron ser notificados.";
         }
@@ -479,39 +475,17 @@ class NominaController extends Controller
 
     private function buildEmailFromNombre(string $nombre): string
     {
-        $normalize = fn (string $s): string => preg_replace('/[^a-z]/', '', strtr(
-            mb_strtolower(trim($s)),
-            ['á'=>'a','é'=>'e','í'=>'i','ó'=>'o','ú'=>'u','ü'=>'u','ñ'=>'n']
-        ));
-
-        $words    = preg_split('/\s+/', trim($nombre));
-        $primero  = $normalize($words[0] ?? 'academico');
-        $apellido = $normalize($words[1] ?? '');
-
-        return ($apellido ? "{$primero}.{$apellido}" : $primero) . '@ucm.cl';
+        return $this->acceso->emailDesdeNombre($nombre);
     }
 
     private function resolveEmail(string $baseEmail): string
     {
-        if (!User::where('email', $baseEmail)->exists()) {
-            return $baseEmail;
-        }
-
-        $base    = explode('@', $baseEmail)[0];
-        $counter = 1;
-        do {
-            $candidate = sprintf('%s.%02d@ucm.cl', $base, $counter);
-            $counter++;
-        } while (User::where('email', $candidate)->exists());
-
-        return $candidate;
+        return $this->acceso->resolverEmail($baseEmail);
     }
 
     private function buildPasswordFromRut(string $rut): string
     {
-        $clean  = str_replace('.', '', $rut);
-        $cuerpo = explode('-', $clean)[0];
-        return preg_replace('/\D/', '', $cuerpo);
+        return $this->acceso->passwordDesdeRut($rut);
     }
 
     private function poblarHistoriales(Nomina $nomina, array $cells, array $mapeoHistorial): void
@@ -585,36 +559,24 @@ class NominaController extends Controller
             'horas_contrato'  => ['nullable', 'integer', 'min:0'],
         ]);
 
-        $user = User::where('rut', $data['rut'])->first();
-
-        if (!$user) {
-            $email = $this->resolveEmail($this->buildEmailFromNombre($data['nombre']));
-
-            $user = User::create([
-                'name'        => $data['nombre'],
-                'rut'         => $data['rut'],
-                'email'       => $email,
-                'password'    => Hash::make($this->buildPasswordFromRut($data['rut'])),
-                'role'        => 'academico',
-                'facultad_id' => $data['facultad_id'] ?? null,
-            ]);
-        }
+        $userExistente = User::where('rut', $data['rut'])->first();
 
         $yaEsta = Nomina::where('periodo_id', $periodo->id)
-            ->where('user_id', $user->id)
+            ->where('rut', $data['rut'])
             ->exists();
 
         if ($yaEsta) {
-            return back()->with('error', "{$user->name} ya está en la nómina de este período.");
+            return back()->with('error', "{$data['nombre']} ya está en la nómina de este período.");
         }
 
         Nomina::create([
             'periodo_id'      => $periodo->id,
-            'user_id'         => $user->id,
+            'user_id'         => $userExistente?->id,
             'estado'          => 'pendiente',
             'con_licencia'    => false,
             'rut'             => $data['rut'],
             'nombre'          => $data['nombre'],
+            'facultad_id'     => $data['facultad_id'] ?? null,
             'categoria'       => $data['categoria']       ?? null,
             'tipo_trabajador' => $data['tipo_trabajador'] ?? null,
             'unidad_superior' => $data['unidad_superior'] ?? null,
@@ -624,7 +586,7 @@ class NominaController extends Controller
 
         return redirect()
             ->route('analista.periodos.nominas.create', $periodo->id)
-            ->with('success', "{$user->name} agregado a la nómina.");
+            ->with('success', "{$data['nombre']} agregado a la nómina. Use «Enviar acceso» para crear su cuenta.");
     }
 
     // ── Editar campos de una nómina ───────────────────────────────────────────
@@ -715,6 +677,8 @@ class NominaController extends Controller
     {
         $nomina->load(['academico', 'historialCalificaciones', 'historialCategorias']);
 
+        $ultimaCalificacion = $nomina->ultimaCalificacionHistorial();
+
         return Inertia::render('Nomina/Detalle', [
             'periodo' => $periodo->only(['id', 'anio', 'nombre']),
             'nomina'  => [
@@ -732,7 +696,10 @@ class NominaController extends Controller
                 'categoria'             => $nomina->categoria,
                 'fecha_categorizacion'  => $nomina->fecha_categorizacion?->format('d/m/Y'),
                 'estado'                => $nomina->estado,
+                'es_solo_da_conocer'    => $nomina->esSoloDaConocer(),
                 'nota_vigente'          => $nomina->notaAnterior(),
+                'concepto_nota'         => $nomina->conceptoAnterior(),
+                'anio_ultima_calificacion' => $ultimaCalificacion?->anio,
                 'nota_vigente_activa'   => $nomina->notaVigente(),
                 'vencimiento_nota'      => $nomina->fechaVencimientoNota()?->format('d/m/Y'),
             ],

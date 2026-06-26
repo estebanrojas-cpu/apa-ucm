@@ -55,6 +55,7 @@ export default function PeriodoIndex({ periodos }) {
                                     <th className="text-left px-5 py-3 font-semibold text-gray-600">Estado</th>
                                     <th className="text-left px-5 py-3 font-semibold text-gray-600">Inicio</th>
                                     <th className="text-left px-5 py-3 font-semibold text-gray-600">Cierre</th>
+                                    <th className="text-left px-5 py-3 font-semibold text-gray-600">Semestres APA</th>
                                     <th className="text-left px-5 py-3 font-semibold text-gray-600">Académicos</th>
                                     <th className="text-left px-5 py-3 font-semibold text-gray-600">Acciones</th>
                                 </tr>
@@ -73,14 +74,31 @@ export default function PeriodoIndex({ periodos }) {
                                             </td>
                                             <td className="px-5 py-3 text-gray-600">{formatDate(p.fecha_inicio)}</td>
                                             <td className="px-5 py-3 text-gray-600">{formatDate(p.fecha_cierre)}</td>
+                                            <td className="px-5 py-3 text-gray-600 text-xs">
+                                                {p.semestres_apa?.completo ? (
+                                                    <>
+                                                        <span>I: {formatDate(p.semestres_apa.s1)}</span>
+                                                        <span className="mx-1 text-gray-300">·</span>
+                                                        <span>II: {formatDate(p.semestres_apa.s2)}</span>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-amber-700">Incompleto</span>
+                                                )}
+                                            </td>
                                             <td className="px-5 py-3 text-gray-600">{p.nominas_count ?? 0}</td>
                                             <td className="px-5 py-3">
-                                                <div className="flex items-center gap-3">
+                                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                                                     <Link
                                                         href={`/analista/periodos/${p.id}/nominas/crear`}
                                                         className="text-xs font-medium text-[#0096D6] hover:underline"
                                                     >
-                                                        Gestionar nómina
+                                                        Nómina
+                                                    </Link>
+                                                    <Link
+                                                        href={`/analista/periodos/${p.id}/comisiones`}
+                                                        className="text-xs font-medium text-[#0096D6] hover:underline"
+                                                    >
+                                                        Comisión CCA
                                                     </Link>
                                                     <a
                                                         href={`/analista/periodos/${p.id}/cronograma/pdf`}

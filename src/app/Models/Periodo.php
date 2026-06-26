@@ -28,6 +28,22 @@ class Periodo extends Model
     public function estaActivo(): bool   { return $this->estado === 'activo'; }
     public function estaCerrado(): bool  { return $this->estado === 'cerrado'; }
 
+    public function semestrePorNumero(int $numero): ?SemestreAcademico
+    {
+        if ($this->relationLoaded('semestres')) {
+            return $this->semestres->firstWhere('numero', $numero);
+        }
+
+        return $this->semestres()->where('numero', $numero)->first();
+    }
+
+    /** Ambos semestres con fecha de cierre — requisito para declarar compromiso APA. */
+    public function tieneSemestresApaConfigurados(): bool
+    {
+        return $this->semestrePorNumero(1)?->fecha_cierre !== null
+            && $this->semestrePorNumero(2)?->fecha_cierre !== null;
+    }
+
     // ── Scopes ───────────────────────────────────────────────────────────
     public function scopeActivo($query)
     {
@@ -58,6 +74,11 @@ class Periodo extends Model
     public function semestres(): HasMany
     {
         return $this->hasMany(SemestreAcademico::class);
+    }
+
+    public function comisionesCca(): HasMany
+    {
+        return $this->hasMany(ComisionCca::class);
     }
 
     // ── Scopes ───────────────────────────────────────────────────────────

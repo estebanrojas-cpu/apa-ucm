@@ -29,7 +29,15 @@ class AuthController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect(self::dashboardRouteFor(Auth::user()->role));
+        $user  = Auth::user();
+        $roles = $user->rolesParaSesion();
+
+        if (count($roles) <= 1) {
+            $request->session()->put('active_role', $roles[0] ?? $user->role);
+            return redirect(self::dashboardRouteFor($user->activeRole()));
+        }
+
+        return redirect()->route('perfil.seleccionar');
     }
 
     public function logout(Request $request)
@@ -44,7 +52,6 @@ class AuthController extends Controller
     public static function dashboardRouteFor(?string $role): string
     {
         return match ($role) {
-            'admin'          => route('admin.dashboard'),
             'analista_ccda'  => route('analista.dashboard'),
             'secretario'     => route('secretario.dashboard'),
             'miembro_cca'    => route('cca.dashboard'),

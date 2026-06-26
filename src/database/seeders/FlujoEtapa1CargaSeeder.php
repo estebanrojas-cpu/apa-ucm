@@ -72,6 +72,7 @@ class FlujoEtapa1CargaSeeder extends Seeder
         // Volver nominas a estado inicial (solo las que ya avanzaron)
         Nomina::where('periodo_id', $periodo->id)
             ->whereNotIn('estado', ['pendiente', 'en_carga'])
+            ->evaluables()
             ->update(['estado' => 'pendiente']);
 
         $this->command->info("✓ Etapa 1 activa — carga_evidencias abierta hasta {$hoy->copy()->addDays(20)->format('d/m/Y')}.");

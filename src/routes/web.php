@@ -1,10 +1,10 @@
 <?php
 
-use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AnalistaCCDAController;
 use App\Http\Controllers\ApelacionController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CompromisoApaController;
+use App\Http\Controllers\ComisionCcaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EvaluacionController;
 use App\Http\Controllers\EvidenciaController;
@@ -12,6 +12,7 @@ use App\Http\Controllers\JefaturaController;
 use App\Http\Controllers\NominaController;
 use App\Http\Controllers\NotificacionController;
 use App\Http\Controllers\PeriodoController;
+use App\Http\Controllers\PerfilController;
 use App\Http\Controllers\SecretarioController;
 use App\Http\Controllers\SolicitudController;
 use App\Http\Controllers\VicerrectoraController;
@@ -19,7 +20,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/', function () {
     return auth()->check()
-        ? redirect(AuthController::dashboardRouteFor(auth()->user()->role))
+        ? redirect(AuthController::dashboardRouteFor(auth()->user()->activeRole()))
         : redirect()->route('login');
 });
 
@@ -30,19 +31,19 @@ Route::middleware('guest')->group(function () {
 
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+    Route::get('/seleccionar-perfil',  [PerfilController::class, 'seleccionar'])->name('perfil.seleccionar');
+    Route::post('/cambiar-perfil',     [PerfilController::class, 'cambiar'])->name('perfil.cambiar');
     Route::get('/notificaciones', [NotificacionController::class, 'index'])->name('notificaciones');
-
-    Route::middleware('role:admin')->prefix('admin')->group(function () {
-        Route::get('/dashboard', [DashboardController::class, 'admin'])->name('admin.dashboard');
-        Route::get('/configuracion-semestres', [AdminController::class, 'configuracionSemestres'])->name('admin.configuracion-semestres');
-        Route::post('/configuracion-semestres', [AdminController::class, 'storeSemestres'])->name('admin.configuracion-semestres.store');
-    });
 
     Route::middleware('role:analista_ccda')->prefix('analista')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'analista'])->name('analista.dashboard');
         Route::get('/periodos',       [PeriodoController::class, 'index'])->name('analista.periodos.index');
         Route::get('/periodos/crear', [PeriodoController::class, 'create'])->name('analista.periodos.create');
         Route::post('/periodos',      [PeriodoController::class, 'store'])->name('analista.periodos.store');
+        Route::get('/periodos/{periodo}/comisiones',                    [ComisionCcaController::class, 'index'])->name('analista.periodos.comisiones.index');
+        Route::get('/periodos/{periodo}/comisiones/{facultad}',         [ComisionCcaController::class, 'edit'])->name('analista.periodos.comisiones.edit');
+        Route::put('/periodos/{periodo}/comisiones/{facultad}',         [ComisionCcaController::class, 'update'])->name('analista.periodos.comisiones.update');
+        Route::post('/periodos/{periodo}/comisiones/{facultad}/confirmar', [ComisionCcaController::class, 'confirmar'])->name('analista.periodos.comisiones.confirmar');
 
         Route::get('/periodos/{periodo}/nominas/crear',           [NominaController::class, 'create'])->name('analista.periodos.nominas.create');
         Route::post('/periodos/{periodo}/nominas',                [NominaController::class, 'store'])->name('analista.periodos.nominas.store');

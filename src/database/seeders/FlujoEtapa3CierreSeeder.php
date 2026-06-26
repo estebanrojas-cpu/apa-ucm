@@ -4,6 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\CalificacionFinal;
 use App\Models\CompromisoApa;
+use App\Models\ComisionIntegrante;
 use App\Models\Cronograma;
 use App\Models\Evaluacion;
 use App\Models\Nomina;
@@ -77,7 +78,12 @@ class FlujoEtapa3CierreSeeder extends Seeder
 
         // ── Auto-completar nominas que la CCA dejó sin calificación final ────
 
-        $cca = User::where('role', 'miembro_cca')->first();
+        $cca = ComisionIntegrante::whereHas('comision', fn ($q) => $q
+            ->where('periodo_id', $periodo->id)
+            ->where('estado', 'confirmada'))
+            ->with('user')
+            ->first()
+            ?->user;
 
         $sinFinalizar = Nomina::with(['evaluaciones', 'compromisoApa', 'calificacionFinal'])
             ->where('periodo_id', $periodo->id)

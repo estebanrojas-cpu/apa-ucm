@@ -9,6 +9,8 @@ use App\Models\Nomina;
 use App\Models\Notificacion;
 use App\Models\Periodo;
 use App\Models\PlazoFacultad;
+use App\Models\User;
+use App\Services\CalificacionCadService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -43,9 +45,12 @@ class SecretarioController extends Controller
                     'con_licencia'         => $n->con_licencia,
                     'observacion_licencia' => $n->observacion_licencia,
                     'tiene_licencia_activa'=> $n->tieneLicenciaMedicaActiva(),
-                    'estado_especial'      => $n->tieneLicenciaMedicaActiva()
+                    'estado_especial'      => $n->labelExclusionEvaluacion()
+                        ?? (!$n->participaEvaluacionFormal()
+                        ? 'Solo registro APA'
+                        : ($n->tieneLicenciaMedicaActiva()
                         ? 'Caso especial - Licencia médica'
-                        : ($n->con_licencia ? 'Caso especial' : null),
+                        : ($n->con_licencia ? 'Caso especial' : null))),
                     'academico'            => [
                         'name' => $n->academico->name,
                         'rut'  => $n->academico->rut,
@@ -222,7 +227,9 @@ class SecretarioController extends Controller
         }
 
         $sinEvaluar = $nominas->filter(
-            fn ($n) => !in_array($n->estado, ['evaluado', 'cerrado'])
+            fn ($n) => $n->participaEvaluacionFormal()
+                && !$n->esSoloDaConocer()
+                && !in_array($n->estado, ['evaluado', 'cerrado'])
         )->count();
 
         if ($sinEvaluar > 0) {
@@ -309,18 +316,51 @@ class SecretarioController extends Controller
             ->whereHas('academico', fn ($q) => $q->where('facultad_id', $acta->facultad_id))
             ->orderBy('created_at')
             ->get()
-            ->map(fn ($n) => [
-                'nombre'       => $n->academico->name,
-                'rut'          => $n->academico->rut,
-                'departamento' => $n->academico->departamento?->nombre,
-                'estado'       => $n->estado,
-                'calificacion' => $n->calificacionFinal?->calificacion,
-                'puntaje'      => $n->calificacionFinal?->puntaje_total,
-                'observacion'  => $n->calificacionFinal?->observacion,
-                'es_apelacion' => $n->calificacionFinal?->es_apelacion ?? false,
-            ]);
+            ->map(function (Nomina $n) {
+                if ($n->esSoloDaConocer()) {
+                    $nota = $n->notaAnterior();
 
-        return view('secretario.acta_cierre', compact('acta', 'periodo', 'facultad', 'nominas'));
+                    return [
+                        'nombre'       => $n->academico->name,
+                        'rut'          => $n->academico->rut,
+                        'departamento' => $n->academico->departamento?->nombre,
+                        'estado'       => $n->estado,
+                        'calificacion' => $nota !== null
+                            ? CalificacionCadService::conceptoDesdeNota($nota)
+                            : null,
+                        'puntaje'      => $nota !== null ? (int) round($nota * 20) : null,
+                        'observacion'  => 'Se da a conocer',
+                        'es_apelacion' => false,
+                        'da_conocer'   => true,
+                    ];
+                }
+
+                return [
+                    'nombre'       => $n->academico->name,
+                    'rut'          => $n->academico->rut,
+                    'departamento' => $n->academico->departamento?->nombre,
+                    'estado'       => $n->estado,
+                    'calificacion' => $n->calificacionFinal?->calificacion,
+                    'puntaje'      => $n->calificacionFinal?->puntaje_total,
+                    'observacion'  => $n->calificacionFinal?->observacion,
+                    'es_apelacion' => $n->calificacionFinal?->es_apelacion ?? false,
+                    'da_conocer'   => false,
+                ];
+            });
+
+        $secretario = $acta->generadaPor;
+
+        $decano = User::where('facultad_id', $acta->facultad_id)
+            ->whereNull('departamento_id')
+            ->whereHas('userRoles', fn ($q) => $q->where('role', 'jefe_academico'))
+            ->first();
+
+        $miembrosCca = User::integrantesComisionPeriodo($acta->periodo_id, $acta->facultad_id);
+
+        return view('secretario.acta_cierre', compact(
+            'acta', 'periodo', 'facultad', 'nominas',
+            'secretario', 'decano', 'miembrosCca'
+        ));
     }
 
     private function formatApelacion(Nomina $nomina): ?array
@@ -362,6 +402,14 @@ class SecretarioController extends Controller
 
         if ($nomina->academico->facultad_id !== $user->facultad_id) {
             abort(403);
+        }
+
+        if ($nomina->esSoloDaConocer()) {
+            return back()->with('error', $nomina->labelExclusionEvaluacion() ?? 'Este académico no participa del proceso evaluativo.');
+        }
+
+        if (!$nomina->participaEvaluacionFormal()) {
+            return back()->with('error', 'Este académico solo registra declaración APA este período; no requiere validación de expediente.');
         }
 
         if (!in_array($nomina->estado, ['pendiente', 'en_carga'])) {
@@ -414,6 +462,7 @@ class SecretarioController extends Controller
         Nomina::where('periodo_id', $periodo->id)
             ->whereHas('academico', fn ($q) => $q->where('facultad_id', $user->facultad_id))
             ->whereIn('estado', ['pendiente', 'en_carga'])
+            ->evaluables()
             ->update(['estado' => 'carga_cerrada']);
 
         return back()->with('success', 'Recepción de evidencias cerrada formalmente. Todos los expedientes activos han sido cerrados.');

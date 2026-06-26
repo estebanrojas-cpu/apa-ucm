@@ -1,7 +1,7 @@
 import { usePage, router, Link, Head } from '@inertiajs/react';
+import { useState, useRef, useEffect } from 'react';
 
 const roleLabels = {
-    admin:          'Administrador',
     analista_ccda:  'Analista CCDA',
     secretario:     'Secretario',
     miembro_cca:    'Miembro CCA',
@@ -11,9 +11,6 @@ const roleLabels = {
 };
 
 const navByRole = {
-    admin: [
-        { label: 'Dashboard', href: '/admin/dashboard',    icon: 'grid' },
-    ],
     analista_ccda: [
         { label: 'Dashboard',      href: '/analista/dashboard',      icon: 'grid' },
         { label: 'Períodos',       href: '/analista/periodos',       icon: 'calendar' },
@@ -95,13 +92,73 @@ function LogoutIcon() {
     );
 }
 
+function SwitchIcon() {
+    return (
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
+                d="M7.5 21L3 16.5m0 0L7.5 12M3 16.5h13.5m0-13.5L21 7.5m0 0L16.5 12M21 7.5H7.5" />
+        </svg>
+    );
+}
+
+function ProfileSwitcher({ activeRole, userRoles }) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef(null);
+
+    useEffect(() => {
+        function close(e) {
+            if (ref.current && !ref.current.contains(e.target)) setOpen(false);
+        }
+        document.addEventListener('mousedown', close);
+        return () => document.removeEventListener('mousedown', close);
+    }, []);
+
+    function switchRole(role) {
+        setOpen(false);
+        router.post('/cambiar-perfil', { role });
+    }
+
+    const others = userRoles.filter(r => r !== activeRole);
+
+    return (
+        <div className="relative" ref={ref}>
+            <button
+                onClick={() => setOpen(o => !o)}
+                title="Cambiar perfil"
+                className="flex items-center gap-1.5 text-blue-200 hover:text-white text-xs transition-colors"
+            >
+                <SwitchIcon />
+                <span className="hidden sm:inline">Perfil</span>
+            </button>
+            {open && (
+                <div className="absolute right-0 top-8 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                    <p className="px-3 py-1.5 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">
+                        Cambiar a
+                    </p>
+                    {others.map(role => (
+                        <button
+                            key={role}
+                            onClick={() => switchRole(role)}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                        >
+                            {roleLabels[role] ?? role}
+                        </button>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
 export default function AppLayout({ title, children }) {
     const page = usePage();
     const { auth, notificaciones_no_leidas: nNotif } = page.props;
     const user = auth.user;
+    const activeRole = auth.active_role ?? user.role;
+    const userRoles  = auth.user_roles ?? [activeRole];
     const currentUrl = page.url;
 
-    const navItems = navByRole[user.role] ?? [];
+    const navItems = navByRole[activeRole] ?? [];
 
     function logout(e) {
         e.preventDefault();
@@ -139,7 +196,7 @@ export default function AppLayout({ title, children }) {
                                 {user.name}
                             </p>
                             <p className="text-blue-200 text-xs opacity-70">
-                                {roleLabels[user.role] ?? user.role}
+                                {roleLabels[activeRole] ?? activeRole}
                             </p>
                         </div>
                         <div className="w-8 h-8 rounded-full bg-[#0096D6] flex items-center justify-center text-white text-sm font-bold shrink-0">
@@ -157,6 +214,9 @@ export default function AppLayout({ title, children }) {
                                 </span>
                             )}
                         </Link>
+                        {userRoles.length > 1 && (
+                            <ProfileSwitcher activeRole={activeRole} userRoles={userRoles} />
+                        )}
                         <button
                             onClick={logout}
                             title="Cerrar sesión"

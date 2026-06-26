@@ -10,11 +10,6 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function admin(): Response
-    {
-        return Inertia::render('Dashboard/Admin');
-    }
-
     public function analista(): Response
     {
         return Inertia::render('Dashboard/AnalistaCCDA', [
@@ -63,10 +58,12 @@ class DashboardController extends Controller
             'mis_sin_evaluar' => 0,
         ];
 
-        if ($periodo && $user->facultad_id) {
+        if ($periodo && $user->facultad_id && $user->puedeActuarComoCca($periodo)) {
             $nominas = Nomina::with('evaluaciones')
                 ->where('periodo_id', $periodo->id)
-                ->whereHas('academico', fn ($q) => $q->where('facultad_id', $user->facultad_id))
+                ->where('facultad_id', $user->facultad_id)
+                ->where('user_id', '!=', $user->id)
+                ->evaluables()
                 ->whereIn('estado', ['carga_cerrada', 'en_evaluacion', 'evaluado'])
                 ->get();
 
@@ -138,12 +135,13 @@ class DashboardController extends Controller
     public function academico(): Response
     {
         $user    = auth()->user();
-        $periodo = Periodo::where('estado', 'activo')->latest()->first();
+        $periodo = Periodo::where('estado', 'activo')->with('semestres')->latest()->first();
 
         $stats = ['evidencias_cargadas' => 0, 'estado_nomina' => null];
+        $compromisoApa = null;
 
         if ($periodo) {
-            $nomina = Nomina::with(['evidenciasNormales', 'calificacionFinal', 'apelacion'])
+            $nomina = Nomina::with(['evidenciasNormales', 'calificacionFinal', 'apelacion', 'compromisos'])
                 ->where('periodo_id', $periodo->id)
                 ->where('user_id', $user->id)
                 ->first();
@@ -174,12 +172,36 @@ class DashboardController extends Controller
                         'destino'   => $ap->destino,
                     ] : null,
                 ];
+
+                if (!$nomina->esSoloDaConocer() && $periodo->tieneSemestresApaConfigurados()) {
+                    $s1 = $periodo->semestrePorNumero(1);
+                    $s2 = $periodo->semestrePorNumero(2);
+                    $c1 = $nomina->compromisos->firstWhere('semestre', 'S1');
+                    $c2 = $nomina->compromisos->firstWhere('semestre', 'S2');
+                    $s1Cerrado = $s1?->estaCerrado() ?? false;
+
+                    $compromisoApa = [
+                        's1' => [
+                            'confirmado' => $c1?->estaConfirmado() ?? false,
+                            'cierre'     => $s1?->fecha_cierre?->format('d/m/Y'),
+                        ],
+                        's2' => [
+                            'confirmado' => $c2?->estaConfirmado() ?? false,
+                            'cierre'     => $s2?->fecha_cierre?->format('d/m/Y'),
+                            'disponible' => $s1Cerrado,
+                        ],
+                        'participa_evaluacion' => $nomina->participaEvaluacionFormal(),
+                        'ciclo_semestres'        => $nomina->cicloEvaluacionSemestres(),
+                        'horas_evaluacion'       => $nomina->horasContratoEvaluacion(),
+                    ];
+                }
             }
         }
 
         return Inertia::render('Dashboard/Academico', [
-            'stats'   => $stats,
-            'periodo' => $periodo?->only(['nombre', 'anio']),
+            'stats'          => $stats,
+            'periodo'        => $periodo?->only(['nombre', 'anio']),
+            'compromisoApa'  => $compromisoApa,
         ]);
     }
 

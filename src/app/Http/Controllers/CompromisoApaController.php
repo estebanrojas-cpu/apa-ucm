@@ -44,13 +44,23 @@ class CompromisoApaController extends Controller
             abort(403, 'No está incluido en la nómina del período activo.');
         }
 
-        if (!$nomina->cargaEvidenciasHabilitada()) {
+        if (!$nomina->puedeDeclararApa()) {
             return redirect()->route('academico.dashboard')
-                ->with('error', 'El plazo de carga de evidencias no está vigente.');
+                ->with('error', 'El plazo para declarar compromiso APA no está vigente.');
+        }
+
+        if (!$periodo->tieneSemestresApaConfigurados()) {
+            return redirect()->route('academico.dashboard')
+                ->with('error', 'El período aún no tiene configurados los semestres para la declaración APA.');
         }
 
         $semestres = $periodo->semestres;
         $semestreData = $semestres->firstWhere('numero', $semestre === 'S1' ? 1 : 2);
+
+        if (!$semestreData?->fecha_cierre) {
+            return redirect()->route('academico.dashboard')
+                ->with('error', 'Este semestre no está configurado en el período activo.');
+        }
 
         if ($semestre === 'S2') {
             $cierreS1 = $semestres->firstWhere('numero', 1)?->fecha_cierre;
@@ -64,9 +74,7 @@ class CompromisoApaController extends Controller
             ->where('semestre', $semestre)
             ->first();
 
-        $horasContrato = $semestre === 'S1'
-            ? (float) ($user->horas_contrato_isem  ?? 0)
-            : (float) ($user->horas_contrato_iisem ?? 0);
+        $horasContrato = $nomina->horasContratoSemestre($semestre);
 
         return Inertia::render('Academico/DeclaracionApa', [
             'periodo'       => $periodo->only(['id', 'anio', 'nombre']),
@@ -75,6 +83,11 @@ class CompromisoApaController extends Controller
             'semestreLabel' => CompromisoApa::labelSemestre($semestre),
             'yaDeclarado'   => $compromisoExistente && $compromisoExistente->estaConfirmado(),
             'fechaCierre'   => $semestreData?->fecha_cierre?->format('d/m/Y'),
+            'soloRegistro'  => !$nomina->participaEvaluacionFormal(),
+            'cicloEvaluacion' => [
+                'semestres' => $nomina->cicloEvaluacionSemestres(),
+                'horas'     => $nomina->horasContratoEvaluacion(),
+            ],
             // datos: hrs_* para pre-rellenar el form si el compromiso existe pero no está confirmado
             'datos'         => $compromisoExistente && !$compromisoExistente->estaConfirmado() ? [
                 'hrs_docencia'       => (float) ($compromisoExistente->hrs_docencia       ?? 0),
@@ -101,9 +114,13 @@ class CompromisoApaController extends Controller
             ->where('user_id', $user->id)
             ->firstOrFail();
 
-        if (!$nomina->cargaEvidenciasHabilitada()) {
+        if (!$nomina->puedeDeclararApa()) {
             return redirect()->route('academico.dashboard')
-                ->with('error', 'El plazo de carga de evidencias no está vigente.');
+                ->with('error', 'El plazo para declarar compromiso APA no está vigente.');
+        }
+
+        if (!$periodo->tieneSemestresApaConfigurados()) {
+            return back()->with('error', 'El período no tiene configurados los semestres para la declaración APA.');
         }
 
         $validated = $request->validate([
@@ -112,14 +129,17 @@ class CompromisoApaController extends Controller
 
         $semestre = $validated['semestre'];
 
+        $numeroSemestre = $semestre === 'S1' ? 1 : 2;
+        if (!$periodo->semestrePorNumero($numeroSemestre)?->fecha_cierre) {
+            return back()->with('error', 'Este semestre no está configurado en el período activo.');
+        }
+
         $existente = $nomina->compromisos->firstWhere('semestre', $semestre);
         if ($existente?->estaConfirmado()) {
             return back()->with('error', 'Este semestre ya fue confirmado.');
         }
 
-        $horasContrato = $semestre === 'S1'
-            ? (float) ($user->horas_contrato_isem  ?? 0)
-            : (float) ($user->horas_contrato_iisem ?? 0);
+        $horasContrato = $nomina->horasContratoSemestre($semestre);
 
         $data = $this->validarHorasYCalcularPct($request, $horasContrato);
 
@@ -136,6 +156,11 @@ class CompromisoApaController extends Controller
         if ($semestre === 'S1') {
             return redirect()->route('academico.dashboard')
                 ->with('success', 'I Semestre confirmado. Podrás declarar el II Semestre cuando cierre el primero.');
+        }
+
+        if (!$nomina->participaEvaluacionFormal()) {
+            return redirect()->route('academico.dashboard')
+                ->with('success', 'II Semestre confirmado. Su categoría no requiere evaluación formal este período; la declaración quedó registrada.');
         }
 
         return redirect()->route('academico.evidencias')

@@ -35,6 +35,7 @@ class JefaturaController extends Controller
             if ($etapaHabilitada) {
                 $query = Nomina::with(['academico.departamento', 'calificacionJefatura'])
                     ->where('periodo_id', $periodo->id)
+                    ->evaluables()
                     ->whereHas('academico', function ($q) use ($user) {
                         $q->where('facultad_id', $user->facultad_id);
                         if ($user->departamento_id) {

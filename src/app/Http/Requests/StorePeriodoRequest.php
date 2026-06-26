@@ -16,6 +16,8 @@ class StorePeriodoRequest extends FormRequest
             'nombre'                 => ['required', 'string', 'max:120'],
             'fecha_inicio'           => ['required', 'date'],
             'fecha_cierre'           => ['required', 'date', 'after:fecha_inicio'],
+            'fecha_cierre_s1'        => ['required', 'date', 'after_or_equal:fecha_inicio', 'before_or_equal:fecha_cierre'],
+            'fecha_cierre_s2'        => ['required', 'date', 'after:fecha_cierre_s1', 'before_or_equal:fecha_cierre'],
             'cronograma'             => ['required', 'array', 'size:8'],
             'cronograma.*.etapa'     => ['required', 'string', 'in:'.implode(',', Cronograma::ETAPAS)],
             'cronograma.*.fecha_fin' => ['required', 'date'],
@@ -92,6 +94,8 @@ class StorePeriodoRequest extends FormRequest
     {
         return [
             'fecha_cierre.after'              => 'La fecha de cierre debe ser posterior al inicio.',
+            'fecha_cierre_s1.before_or_equal' => 'El cierre del I Semestre debe estar dentro del período.',
+            'fecha_cierre_s2.before_or_equal' => 'El cierre del II Semestre debe estar dentro del período.',
             'cronograma.size'                 => 'El cronograma debe tener exactamente 8 etapas.',
             'cronograma.*.etapa.in'           => 'La etapa indicada no es válida.',
             'cronograma.*.fecha_fin.required' => 'La fecha de cierre de la etapa es obligatoria.',

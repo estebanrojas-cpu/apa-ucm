@@ -66,7 +66,7 @@ class FlujoEtapa2CcaSeeder extends Seeder
         }
 
         // Cierre formal del plazo de todas las facultades (si aún no lo tienen)
-        $secretario = User::where('role', 'secretario')->first();
+        $secretario = User::findByAssignedRole('secretario');
         PlazoFacultad::where('periodo_id', $periodo->id)
             ->whereNull('cerrado_en')
             ->update([
@@ -82,6 +82,10 @@ class FlujoEtapa2CcaSeeder extends Seeder
             ->whereIn('estado', ['pendiente', 'en_carga'])
             ->get()
             ->each(function (Nomina $nomina) use (&$cerradas) {
+                if (!$nomina->participaEvaluacionFormal()) {
+                    return;
+                }
+
                 $tieneCompromiso = $nomina->tieneCompromisoApaConfirmado();
                 $tieneEvidencias = $nomina->evidenciasNormales->isNotEmpty();
 

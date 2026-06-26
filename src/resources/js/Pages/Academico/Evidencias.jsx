@@ -2,7 +2,7 @@ import { Head, Link, usePage } from '@inertiajs/react';
 import AppLayout from '@/Layouts/AppLayout';
 
 export default function Evidencias({
-    periodo, nomina, plazo, puedeCargar, puedeCargarApelacion,
+    periodo, nomina, plazo, puedeCargar, motivoBloqueoCarga, puedeCargarApelacion,
     apelacionEtapaVigente, apelacion, categorias, conteoEvidencias,
 }) {
     const { flash } = usePage().props;
@@ -24,6 +24,13 @@ export default function Evidencias({
                 )}
 
                 <EstadoBanner periodo={periodo} nomina={nomina} plazo={plazo} puedeCargar={puedeCargar} />
+
+                {motivoBloqueoCarga && (
+                    <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-900">
+                        <p className="font-semibold text-blue-800">Carga de evidencias no disponible</p>
+                        <p className="mt-1">{motivoBloqueoCarga}</p>
+                    </div>
+                )}
 
                 {!periodo && (
                     <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center text-yellow-800 text-sm">

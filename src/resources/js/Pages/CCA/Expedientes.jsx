@@ -8,7 +8,10 @@ const ESTADO_BADGE = {
     evaluado:      'bg-green-100 text-green-700',
 };
 
-export default function Expedientes({ periodo, expedientes, evaluacionHabilitada, fechaAperturaEval }) {
+export default function Expedientes({
+    periodo, expedientes, evaluacionHabilitada, fechaAperturaEval,
+    comisionConfirmada, esIntegranteComision,
+}) {
     const { flash } = usePage().props;
 
     const [busqueda,      setBusqueda]      = useState('');
@@ -51,7 +54,29 @@ export default function Expedientes({ periodo, expedientes, evaluacionHabilitada
                     </div>
                 )}
 
-                {!evaluacionHabilitada && (
+                {!esIntegranteComision && (
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center mb-5">
+                        <p className="text-red-800 font-semibold text-sm mb-1">
+                            No está designado en la comisión evaluadora
+                        </p>
+                        <p className="text-red-700 text-sm">
+                            El analista CCDA debe confirmar su integración en la comisión del período activo.
+                        </p>
+                    </div>
+                )}
+
+                {esIntegranteComision && !comisionConfirmada && (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center mb-5">
+                        <p className="text-amber-800 font-semibold text-sm mb-1">
+                            Comisión evaluadora pendiente de confirmación
+                        </p>
+                        <p className="text-amber-700 text-sm">
+                            El analista CCDA aún no confirma la comisión de su facultad para este período.
+                        </p>
+                    </div>
+                )}
+
+                {esIntegranteComision && comisionConfirmada && !evaluacionHabilitada && (
                     <div className="bg-amber-50 border border-amber-200 rounded-xl p-6 text-center">
                         <p className="text-amber-800 font-semibold text-sm mb-1">
                             Validación del secretario aún vigente

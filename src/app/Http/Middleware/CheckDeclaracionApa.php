@@ -16,7 +16,7 @@ class CheckDeclaracionApa
     {
         $user = $request->user();
 
-        if (!$user || $user->role !== 'academico') {
+        if (!$user || $user->activeRole() !== 'academico') {
             return $next($request);
         }
 
@@ -40,8 +40,16 @@ class CheckDeclaracionApa
             return $next($request);
         }
 
+        if ($nomina->esSoloDaConocer()) {
+            return $next($request);
+        }
+
         // Solo verificar si la carga de evidencias está habilitada
         if (!$nomina->cargaEvidenciasHabilitada()) {
+            return $next($request);
+        }
+
+        if (!$periodo->tieneSemestresApaConfigurados()) {
             return $next($request);
         }
 

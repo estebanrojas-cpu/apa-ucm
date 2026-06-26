@@ -12,8 +12,8 @@ class DatabaseSeeder extends Seeder
         $this->call(CategoriasApaSeeder::class);
 
         if (app()->isLocal()) {
-            $this->call(UsuariosPruebaSeeder::class);
-            $this->call(DemoSeeder::class);
+            $this->call(UsuariosInstitucionalesSeeder::class);
+            $this->call(PeriodoBaseSeeder::class);
         }
     }
 }

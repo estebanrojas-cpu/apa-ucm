@@ -83,6 +83,27 @@ class AnalistaCCDAController extends Controller
                     $v = $verificaciones->get($f->id);
 
                     $academicos = $nominas->map(function (Nomina $n) {
+                        if ($n->esSoloDaConocer()) {
+                            $nota = $n->notaAnterior();
+
+                            return [
+                                'id'               => $n->id,
+                                'nombre'           => $n->academico->name,
+                                'rut'              => $n->academico->rut,
+                                'nota'             => $nota !== null ? number_format($nota, 1) : null,
+                                'concepto'         => $nota !== null
+                                    ? CalificacionCadService::labelConcepto(
+                                        CalificacionCadService::conceptoDesdeNota($nota)
+                                    )
+                                    : 'Se da a conocer',
+                                'nota_concepto_ok' => true,
+                                'apel_resuelta'    => true,
+                                'retro_registrada' => true,
+                                'estado'           => 'da_conocer',
+                                'apelacion_info'   => null,
+                            ];
+                        }
+
                         $calif = $n->calificacionFinal;
                         $nota  = $calif ? (float) $calif->nota_final : null;
 

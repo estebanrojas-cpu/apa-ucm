@@ -39,6 +39,12 @@ docker compose exec -T app php artisan migrate:fresh --seed --force
 
 # 6. Verificar resultado
 echo ""
+echo "📄 Generando fixture Excel/CSV de nómina SAPD..."
+docker compose exec -T app php fixtures/build_nomina_csv.php 2>/dev/null || true
+docker compose exec -T app php artisan nomina:generar-demo-excel 2>/dev/null || true
+
+# 7. Verificar resultado
+echo ""
 echo "✅ Sistema reseteado correctamente!"
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -47,10 +53,13 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 
 docker compose exec -T app php artisan tinker --execute="
 echo 'Usuarios: ' . App\Models\User::count() . PHP_EOL;
+echo 'User roles: ' . App\Models\UserRole::count() . PHP_EOL;
+echo 'Comisiones CCA: ' . App\Models\ComisionCca::count() . PHP_EOL;
 echo 'Facultades: ' . App\Models\Facultad::count() . PHP_EOL;
 echo 'Periodos: ' . App\Models\Periodo::count() . PHP_EOL;
 echo 'Semestres Académicos: ' . App\Models\SemestreAcademico::count() . PHP_EOL;
 echo 'Nominas: ' . App\Models\Nomina::count() . PHP_EOL;
+echo 'Nominas sin cuenta: ' . App\Models\Nomina::whereNull('user_id')->count() . PHP_EOL;
 echo 'Compromisos APA: ' . App\Models\CompromisoApa::count() . PHP_EOL;
 echo 'Evidencias: ' . App\Models\Evidencia::count() . PHP_EOL;
 " 2>/dev/null
@@ -58,23 +67,32 @@ echo 'Evidencias: ' . App\Models\Evidencia::count() . PHP_EOL;
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "🌐 Accede al sistema en: http://localhost:8080"
-echo "🔑 Password universal: password"
 echo ""
-echo "📖 Lee la guía completa en: GUIA_TESTING_COMPLETO.md"
+echo "👥 Institucionales (única contraseña de demo: password):"
+echo "  - analista@ucm.cl     → Analista CCDA"
+echo "  - vicerrectora@ucm.cl → Vicerrectoría"
 echo ""
-echo "👥 Usuarios principales:"
-echo "  - admin@ucm.cl           → Admin"
-echo "  - analista@ucm.cl        → Analista CCDA"
-echo "  - secretario@ucm.cl      → Secretario FCI"
-echo "  - cca@ucm.cl             → Miembro CCA FCI"
-echo "  - jefe@ucm.cl            → Jefe Académico FCI"
-echo "  - vicerrectora@ucm.cl    → Vicerrectora"
-echo "  - academico@ucm.cl       → Académico (S1+S2 OK)"
-echo "  - academico.fcaf@ucm.cl  → Académico FCAF (solo S1)"
+echo "👥 Personas en nómina — aún SIN cuenta de usuario:"
+echo "  FCI:  maria.rodriguez, carlos.fuentes, pedro.alarcon, sandra.munoz, ana.martinez…"
+echo "  FCAF: rosa.morales, jorge.silva, patricia.lagos, fernando.munoz…"
 echo ""
-echo "📊 Para importar nómina extendida:"
-echo "  Login como analista@ucm.cl"
-echo "  → Períodos → Gestionar"
-echo "  → Importar Excel SAPD"
-echo "  → /Users/tban/Documents/apa-ucm/nomina_academicos_vigencia_realista.csv"
+echo "📊 Flujo de prueba:"
+echo "  1. analista@ucm.cl → Comisión CCA: designar y confirmar (FCI: Pedro+Sandra; FCAF: Jorge+Fernando)"
+echo "  2. analista@ucm.cl → Nómina → «Comunicar acceso»:"
+echo "       · crea la cuenta de cada persona en la nómina"
+echo "       · asigna perfiles (académico, secretario, jefe académico…)"
+echo "       · envía correo con usuario y contraseña inicial"
+echo "  3. Cada persona ingresa con las credenciales recibidas por correo"
+echo "  4. Académico/Secretario → compromiso APA por semestre + evidencias"
+echo "  5. carlos.fuentes@ucm.cl (Secretario) → validar expedientes"
+echo "  6. docker compose exec app php artisan db:seed --class=FlujoEtapa2CcaSeeder"
+echo "  7. pedro/sandra → perfil Miembro CCA → evaluar"
+echo "  8. docker compose exec app php artisan db:seed --class=FlujoEtapa3CierreSeeder"
+echo ""
+echo "📧 En local, revisa el correo en Mailpit/logs si no llega al buzón real."
+echo ""
+echo "📎 Excel SAPD de prueba (mismo cast que el seeder):"
+echo "  src/fixtures/nomina_prueba_sapd.csv   ← importar directo"
+echo "  src/fixtures/nomina_prueba_sapd.xlsx  ← tras reset o: php artisan nomina:generar-demo-excel"
+echo "  Horas: 40 jornada completa · 24 part-time"
 echo ""

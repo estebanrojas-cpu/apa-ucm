@@ -22,10 +22,17 @@ return Application::configure(basePath: dirname(__DIR__))
             'academico.no_licencia'=> \App\Http\Middleware\BlockAcademicoLicencia::class,
             'declaracion.apa'      => \App\Http\Middleware\CheckDeclaracionApa::class,
         ]);
+        $middleware->redirectGuestsTo(fn () => route('login'));
         $middleware->redirectUsersTo(
-            fn (Request $request) => AuthController::dashboardRouteFor($request->user()?->role)
+            fn (Request $request) => AuthController::dashboardRouteFor($request->user()?->activeRole())
         );
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        //
+        $exceptions->respond(function (\Symfony\Component\HttpFoundation\Response $response, \Throwable $exception, Request $request) {
+            if ($exception instanceof \Illuminate\Auth\AuthenticationException) {
+                return redirect()->guest(route('login'));
+            }
+
+            return $response;
+        });
     })->create();
