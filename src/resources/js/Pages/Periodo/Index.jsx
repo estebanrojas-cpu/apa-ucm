@@ -95,8 +95,14 @@ export default function PeriodoIndex({ periodos }) {
                                                         Nómina
                                                     </Link>
                                                     <Link
-                                                        href={`/analista/periodos/${p.id}/comisiones`}
+                                                        href={`/analista/periodos/${p.id}/cargos`}
                                                         className="text-xs font-medium text-[#0096D6] hover:underline"
+                                                    >
+                                                        Cargos facultad
+                                                    </Link>
+                                                    <Link
+                                                        href={`/analista/periodos/${p.id}/comisiones`}
+                                                        className="text-xs font-medium text-gray-500 hover:underline"
                                                     >
                                                         Comisión CCA
                                                     </Link>

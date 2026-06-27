@@ -18,10 +18,13 @@ class HandleInertiaRequests extends Middleware
     {
         return array_merge(parent::share($request), [
             'auth' => [
-                'user'        => $request->user()?->load('facultad'),
-                'active_role' => $request->user()?->activeRole(),
-                'user_roles'  => $request->user()
+                'user'         => $request->user()?->load('facultad'),
+                'active_role'  => $request->user()?->activeRole(),
+                'user_roles'   => $request->user()
                     ? $request->user()->rolesParaSesion()
+                    : [],
+                'cargo_badges' => $request->user()
+                    ? app(\App\Services\CargoPeriodoService::class)->badgesCargosSinVista($request->user())
                     : [],
             ],
             'flash' => [

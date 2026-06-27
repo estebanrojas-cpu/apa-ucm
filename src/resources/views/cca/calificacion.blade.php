@@ -382,8 +382,8 @@
         {{-- Fila calificación final --}}
         <tr class="row-final">
             <td colspan="2" class="left">Calificación Final</td>
-            <td>{{ $academico->horas_contrato_isem ?? '—' }}</td>
-            <td>{{ $academico->horas_contrato_iisem ?? '—' }}</td>
+            <td>{{ isset($totalHorasIsem) ? number_format((float) $totalHorasIsem, 2) : ($academico->horas_contrato_isem ?? '—') }}</td>
+            <td>{{ isset($totalHorasIisem) ? number_format((float) $totalHorasIisem, 2) : ($academico->horas_contrato_iisem ?? '—') }}</td>
             <td>100%</td>
             <td>{{ number_format((float) $calificacion->nota_final, 2) }}</td>
             <td>{{ $calificacion->calificacionLabel() }}</td>

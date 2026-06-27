@@ -1,5 +1,5 @@
 import { Head, useForm, usePage } from '@inertiajs/react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import AppLayout from '@/Layouts/AppLayout';
 
 const AREAS = [
@@ -44,6 +44,95 @@ function calcularPorcentajes(horas, decimales = 2) {
     return pcts;
 }
 
+function ModalConfirmarHorasApa({
+    open, semestreLabel, areas, pcts, totalHras, horasContrato, decimales,
+    aceptado, processing, onAceptadoChange, onConfirm, onCancel,
+}) {
+    if (!open) return null;
+
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/40" onClick={onCancel} aria-hidden="true" />
+            <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="modal-confirmar-apa-title"
+                className="relative bg-white rounded-xl shadow-xl w-full max-w-lg p-6 max-h-[90vh] overflow-y-auto"
+            >
+                <h3 id="modal-confirmar-apa-title" className="text-base font-semibold text-gray-900">
+                    Confirmar compromiso APA — {semestreLabel}
+                </h3>
+                <p className="text-sm text-gray-500 mt-1">
+                    Revise que las horas declaradas coinciden con lo acordado con su director de departamento.
+                    Una vez confirmado no podrá modificarse.
+                </p>
+
+                <div className="mt-4 rounded-lg border border-gray-200 overflow-hidden text-sm">
+                    <table className="w-full">
+                        <thead>
+                            <tr className="bg-gray-50 text-xs text-gray-500">
+                                <th className="text-left px-3 py-2 font-medium">Área</th>
+                                <th className="text-right px-3 py-2 font-medium">Horas</th>
+                                <th className="text-right px-3 py-2 font-medium">%</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                            {areas.map(a => (
+                                <tr key={a.hrsKey}>
+                                    <td className="px-3 py-2 text-gray-700">{a.label}</td>
+                                    <td className="px-3 py-2 text-right tabular-nums text-gray-800">
+                                        {(parseFloat(a.hrs) || 0).toFixed(1)} h
+                                    </td>
+                                    <td className="px-3 py-2 text-right tabular-nums font-medium text-[#1B2D6B]">
+                                        {pcts[a.pctKey].toFixed(decimales)}%
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                        <tfoot>
+                            <tr className="bg-blue-50 font-semibold text-blue-900">
+                                <td className="px-3 py-2">Total</td>
+                                <td className="px-3 py-2 text-right tabular-nums">{totalHras.toFixed(1)} h</td>
+                                <td className="px-3 py-2 text-right">100%</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                {horasContrato > 0 && (
+                    <p className="mt-3 text-xs text-gray-500">
+                        Horas de contrato del semestre: <span className="font-semibold text-gray-700">{horasContrato} h</span>
+                    </p>
+                )}
+
+                <label className="mt-4 flex items-start gap-2.5 cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={aceptado}
+                        onChange={e => onAceptadoChange(e.target.checked)}
+                        className="mt-0.5 rounded border-gray-300 text-[#1B2D6B] focus:ring-[#1B2D6B]/30"
+                    />
+                    <span className="text-sm text-gray-700 leading-snug">
+                        Confirmo que las horas declaradas son correctas y corresponden a mi acuerdo
+                        con la jefatura o director de departamento.
+                    </span>
+                </label>
+
+                <div className="mt-6 flex gap-3 justify-end">
+                    <button type="button" onClick={onCancel} disabled={processing}
+                        className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800 disabled:opacity-50">
+                        Cancelar
+                    </button>
+                    <button type="button" onClick={onConfirm} disabled={processing || !aceptado}
+                        className="px-4 py-2 text-sm font-medium bg-[#1B2D6B] text-white rounded-lg hover:bg-[#152558] disabled:opacity-50">
+                        {processing ? 'Confirmando...' : `Confirmar ${semestreLabel}`}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
 export default function DeclaracionApa({
     periodo, nomina, semestre, semestreLabel, yaDeclarado, fechaCierre, datos, config, soloRegistro, cicloEvaluacion,
 }) {
@@ -68,12 +157,36 @@ export default function DeclaracionApa({
         };
     }, [form.data, decimales]);
 
-    const tieneHoras      = totalHras > 0;
+    const tieneHoras       = totalHras > 0;
     const horasIncorrectas = horasContrato > 0 && tieneHoras && Math.abs(totalHras - horasContrato) > 0.01;
 
-    function submit(e) {
+    const [modalAbierto, setModalAbierto] = useState(false);
+    const [aceptado, setAceptado]         = useState(false);
+
+    const areasResumen = useMemo(() => AREAS.map(a => ({
+        ...a,
+        hrs: form.data[a.hrsKey],
+    })), [form.data]);
+
+    function abrirModal(e) {
         e.preventDefault();
-        form.post('/academico/declaracion-apa');
+        setAceptado(false);
+        setModalAbierto(true);
+    }
+
+    function cerrarModal() {
+        if (form.processing) return;
+        setModalAbierto(false);
+        setAceptado(false);
+    }
+
+    function confirmarDeclaracion() {
+        form.post('/academico/declaracion-apa', {
+            onFinish: () => {
+                setModalAbierto(false);
+                setAceptado(false);
+            },
+        });
     }
 
     if (!periodo) {
@@ -139,7 +252,7 @@ export default function DeclaracionApa({
                                 Este semestre ya fue confirmado.
                             </div>
                         ) : (
-                            <form onSubmit={submit} className="mt-6 space-y-4">
+                            <form onSubmit={abrirModal} className="mt-6 space-y-4">
 
                                 {/* ── Áreas del 100% ─────────────────────────── */}
                                 {AREAS.map(a => (
@@ -240,6 +353,21 @@ export default function DeclaracionApa({
                         )}
                     </div>
                 </div>
+
+                <ModalConfirmarHorasApa
+                    open={modalAbierto}
+                    semestreLabel={semestreLabel}
+                    areas={areasResumen}
+                    pcts={pcts}
+                    totalHras={totalHras}
+                    horasContrato={horasContrato}
+                    decimales={decimales}
+                    aceptado={aceptado}
+                    processing={form.processing}
+                    onAceptadoChange={setAceptado}
+                    onConfirm={confirmarDeclaracion}
+                    onCancel={cerrarModal}
+                />
             </AppLayout>
         </>
     );

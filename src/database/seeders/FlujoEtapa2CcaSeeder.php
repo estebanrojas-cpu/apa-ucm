@@ -29,7 +29,7 @@ use Illuminate\Database\Seeder;
  *  - registro_ccda           → inicio = D+46, fin = D+55
  *  - revision_vicerrectoria  → inicio = D+56, fin = D+65
  *  - plazo_facultad          → cerrado_en = ahora (cierre formal de recepción)
- *  - nominas pendiente/en_carga con evidencias + compromiso → carga_cerrada
+ *  - nominas pendiente/en_carga con S1+S2 APA confirmados y evidencias → carga_cerrada
  */
 class FlujoEtapa2CcaSeeder extends Seeder
 {
@@ -74,7 +74,7 @@ class FlujoEtapa2CcaSeeder extends Seeder
                 'cerrado_por' => $secretario?->id,
             ]);
 
-        // Marcar como carga_cerrada las nominas listas (con compromiso APA confirmado y evidencias)
+        // Marcar como carga_cerrada solo expedientes listos para CCA (S1+S2 + evidencias)
         $cerradas = 0;
 
         Nomina::with(['compromisos', 'evidenciasNormales'])
@@ -95,16 +95,8 @@ class FlujoEtapa2CcaSeeder extends Seeder
                 }
             });
 
-        // Nominas sin user_id (importadas desde Excel) también pasan a carga_cerrada
-        $sinUser = Nomina::where('periodo_id', $periodo->id)
-            ->whereNull('user_id')
-            ->whereIn('estado', ['pendiente', 'en_carga'])
-            ->update(['estado' => 'carga_cerrada']);
-
-        $cerradas += $sinUser;
-
         $this->command->info("✓ Etapa 2 activa — evaluacion_cca abierta hasta {$hoy->copy()->addDays(20)->format('d/m/Y')}.");
-        $this->command->info("  {$cerradas} expediente(s) marcados como carga_cerrada (listos para CCA).");
+        $this->command->info("  {$cerradas} expediente(s) marcados como carga_cerrada (S1+S2 APA + evidencias).");
         $this->command->newLine();
 
         $pendientes = Nomina::where('periodo_id', $periodo->id)
@@ -112,7 +104,7 @@ class FlujoEtapa2CcaSeeder extends Seeder
             ->count();
 
         if ($pendientes > 0) {
-            $this->command->warn("  {$pendientes} nomina(s) aún en pendiente/en_carga (sin evidencias o sin compromiso APA).");
+            $this->command->warn("  {$pendientes} nomina(s) aún en pendiente/en_carga (sin S1+S2 APA confirmados o sin evidencias).");
         }
 
         $this->command->info('  Rol CCA: ingresa a Expedientes → evalúa cada académico.');

@@ -2,10 +2,12 @@
 
 use App\Http\Controllers\AnalistaCCDAController;
 use App\Http\Controllers\ApelacionController;
+use App\Http\Controllers\AsignacionFacultadController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CompromisoApaController;
 use App\Http\Controllers\ComisionCcaController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DecanoController;
 use App\Http\Controllers\EvaluacionController;
 use App\Http\Controllers\EvidenciaController;
 use App\Http\Controllers\JefaturaController;
@@ -15,6 +17,7 @@ use App\Http\Controllers\PeriodoController;
 use App\Http\Controllers\PerfilController;
 use App\Http\Controllers\SecretarioController;
 use App\Http\Controllers\SolicitudController;
+use App\Http\Controllers\SuperAdminController;
 use App\Http\Controllers\VicerrectoraController;
 use Illuminate\Support\Facades\Route;
 
@@ -35,6 +38,12 @@ Route::middleware('auth')->group(function () {
     Route::post('/cambiar-perfil',     [PerfilController::class, 'cambiar'])->name('perfil.cambiar');
     Route::get('/notificaciones', [NotificacionController::class, 'index'])->name('notificaciones');
 
+    Route::middleware('role:super_admin')->prefix('super-admin')->group(function () {
+        Route::get('/usuarios',        [SuperAdminController::class, 'index'])->name('super-admin.usuarios');
+        Route::post('/usuarios',       [SuperAdminController::class, 'store'])->name('super-admin.usuarios.store');
+        Route::patch('/usuarios/{user}/activo', [SuperAdminController::class, 'toggleActivo'])->name('super-admin.usuarios.activo');
+    });
+
     Route::middleware('role:analista_ccda')->prefix('analista')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'analista'])->name('analista.dashboard');
         Route::get('/periodos',       [PeriodoController::class, 'index'])->name('analista.periodos.index');
@@ -44,6 +53,12 @@ Route::middleware('auth')->group(function () {
         Route::get('/periodos/{periodo}/comisiones/{facultad}',         [ComisionCcaController::class, 'edit'])->name('analista.periodos.comisiones.edit');
         Route::put('/periodos/{periodo}/comisiones/{facultad}',         [ComisionCcaController::class, 'update'])->name('analista.periodos.comisiones.update');
         Route::post('/periodos/{periodo}/comisiones/{facultad}/confirmar', [ComisionCcaController::class, 'confirmar'])->name('analista.periodos.comisiones.confirmar');
+
+        Route::get('/periodos/{periodo}/cargos',                              [AsignacionFacultadController::class, 'index'])->name('analista.periodos.cargos.index');
+        Route::get('/periodos/{periodo}/cargos/{facultad}',                   [AsignacionFacultadController::class, 'edit'])->name('analista.periodos.cargos.edit');
+        Route::put('/periodos/{periodo}/cargos/{facultad}',                   [AsignacionFacultadController::class, 'update'])->name('analista.periodos.cargos.update');
+        Route::post('/periodos/{periodo}/cargos/{facultad}/confirmar-comision', [AsignacionFacultadController::class, 'confirmarComision'])->name('analista.periodos.cargos.confirmar');
+        Route::get('/periodos/{periodo}/cargos/{facultad}/buscar',            [AsignacionFacultadController::class, 'buscarCandidatos'])->name('analista.periodos.cargos.buscar');
 
         Route::get('/periodos/{periodo}/nominas/crear',           [NominaController::class, 'create'])->name('analista.periodos.nominas.create');
         Route::post('/periodos/{periodo}/nominas',                [NominaController::class, 'store'])->name('analista.periodos.nominas.store');
@@ -118,12 +133,18 @@ Route::middleware('auth')->group(function () {
         Route::post('/evaluaciones/{evaluacion}/comentario', [VicerrectoraController::class, 'storeComentario'])->name('vicerrectora.comentario.store');
     });
 
-    Route::middleware('role:jefe_academico')->prefix('jefe')->group(function () {
+    Route::middleware('role:director_departamento,jefe_academico')->prefix('jefe')->group(function () {
         Route::get('/dashboard',                    [DashboardController::class, 'jefe'])->name('jefe.dashboard');
         Route::get('/academicos',                   [JefaturaController::class,  'index'])->name('jefe.academicos');
         Route::get('/academicos/{nomina}',          [JefaturaController::class,  'show'])->name('jefe.academicos.show');
         Route::post('/academicos/{nomina}/informe', [JefaturaController::class,  'store'])->name('jefe.academicos.store');
         Route::get('/academicos/{nomina}/imprimir', [JefaturaController::class,  'imprimir'])->name('jefe.academicos.imprimir');
+    });
+
+    Route::middleware('role:decano')->prefix('decano')->group(function () {
+        Route::get('/directivos',                   [DecanoController::class, 'index'])->name('decano.directivos');
+        Route::get('/directivos/{nomina}',          [DecanoController::class, 'show'])->name('decano.directivos.show');
+        Route::post('/directivos/{nomina}/informe', [DecanoController::class, 'store'])->name('decano.directivos.store');
     });
 
     Route::middleware(['role:academico', 'academico.no_licencia'])->prefix('academico')->group(function () {

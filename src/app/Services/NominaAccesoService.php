@@ -9,28 +9,13 @@ use App\Services\ApaContratoService;
 class NominaAccesoService
 {
     /**
-     * Roles de acceso según cargo en nómina SAPD (multi-perfil).
-     * El secretario conserva perfil académico y participa del proceso evaluativo.
+     * Todos los usuarios de nómina son académicos en base.
+     * Los cargos del período (secretario, decano, CCA…) se asignan aparte.
      *
      * @return list<string>
      */
     public function inferirRoles(Nomina $nomina): array
     {
-        $posicion = mb_strtolower($nomina->nombre_posicion ?? '');
-
-        if (str_contains($posicion, 'decana') || str_contains($posicion, 'decano')) {
-            return ['jefe_academico'];
-        }
-
-        if ((str_contains($posicion, 'director') || str_contains($posicion, 'directora'))
-            && (str_contains($posicion, 'departamento') || str_contains($posicion, 'depto'))) {
-            return ['jefe_academico'];
-        }
-
-        if (str_contains($posicion, 'secretario') || str_contains($posicion, 'secretaria')) {
-            return ['secretario', 'academico'];
-        }
-
         return ['academico'];
     }
 
@@ -45,7 +30,7 @@ class NominaAccesoService
         return $this->resolverEmail($this->emailDesdeNombre($nomina->nombre ?? ''));
     }
 
-    public function provisionarUsuario(Nomina $nomina): User
+    public function provisionarUsuario(Nomina $nomina, bool $soloCrearRolAcademico = true): User
     {
         $rut = $nomina->rut;
         if (!$rut) {
@@ -53,6 +38,7 @@ class NominaAccesoService
         }
 
         $user = User::where('rut', $rut)->first();
+        $esNuevo = !$user;
 
         if (!$user) {
             $email = $this->emailParaNomina($nomina);
@@ -66,16 +52,23 @@ class NominaAccesoService
                 'facultad_id' => $nomina->facultad_id,
                 'activo'      => true,
             ]);
+
+            $user->syncUserRoles(['academico']);
         } else {
-            $user->update([
+            $user->update(array_filter([
                 'name'        => $nomina->nombre ?? $user->name,
                 'facultad_id' => $nomina->facultad_id ?? $user->facultad_id,
-            ]);
+            ]));
+
+            if ($soloCrearRolAcademico && !$user->hasAnyAssignedRole(['academico'])) {
+                $roles = $user->assignedRoles();
+                $roles[] = 'academico';
+                $user->syncUserRoles(array_values(array_unique($roles)));
+            }
         }
 
-        $user->update(app(ApaContratoService::class)->perfilDesdeNomina($nomina));
-
-        $user->syncUserRoles($this->inferirRoles($nomina));
+        $perfil = app(ApaContratoService::class)->perfilDesdeNomina($nomina);
+        $user->update($perfil);
 
         if (!$nomina->user_id) {
             $nomina->update(['user_id' => $user->id]);

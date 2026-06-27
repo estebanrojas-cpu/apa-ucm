@@ -62,14 +62,24 @@ class AnalistaCCDAController extends Controller
                         return null;
                     }
 
-                    $total    = $nominas->count();
-                    $evaluados = $nominas->whereIn('estado', ['evaluado', 'cerrado'])->count();
+                    $nominasVerificacion = $nominas->filter(
+                        fn (Nomina $n) => !$n->esSoloDaConocer()
+                    );
 
-                    $apelPendientes = $nominas->filter(
+                    $total     = $nominasVerificacion->count();
+                    $evaluados = $nominasVerificacion
+                        ->whereIn('estado', ['evaluado', 'cerrado'])
+                        ->count();
+
+                    $apelPendientes = $nominasVerificacion->filter(
                         fn ($n) => $n->apelacion && in_array($n->apelacion->estado, ['solicitada', 'en_revision'])
                     )->count();
 
-                    $ccdaPendientes = $nominas->filter(
+                    $reevalCcaPendientes = $nominasVerificacion->filter(
+                        fn ($n) => $n->requiereReevaluacionApelacionCca()
+                    )->count();
+
+                    $ccdaPendientes = $nominasVerificacion->filter(
                         fn ($n) => $n->estado === 'en_evaluacion'
                             && $n->apelacion?->estado === 'resuelta'
                             && ($n->apelacion->destino ?? 'cca') === 'ccda'
@@ -82,28 +92,7 @@ class AnalistaCCDAController extends Controller
 
                     $v = $verificaciones->get($f->id);
 
-                    $academicos = $nominas->map(function (Nomina $n) {
-                        if ($n->esSoloDaConocer()) {
-                            $nota = $n->notaAnterior();
-
-                            return [
-                                'id'               => $n->id,
-                                'nombre'           => $n->academico->name,
-                                'rut'              => $n->academico->rut,
-                                'nota'             => $nota !== null ? number_format($nota, 1) : null,
-                                'concepto'         => $nota !== null
-                                    ? CalificacionCadService::labelConcepto(
-                                        CalificacionCadService::conceptoDesdeNota($nota)
-                                    )
-                                    : 'Se da a conocer',
-                                'nota_concepto_ok' => true,
-                                'apel_resuelta'    => true,
-                                'retro_registrada' => true,
-                                'estado'           => 'da_conocer',
-                                'apelacion_info'   => null,
-                            ];
-                        }
-
+                    $academicos = $nominasVerificacion->map(function (Nomina $n) {
                         $calif = $n->calificacionFinal;
                         $nota  = $calif ? (float) $calif->nota_final : null;
 
@@ -143,18 +132,32 @@ class AnalistaCCDAController extends Controller
                         ];
                     })->values();
 
+                    $daConocer = $nominas
+                        ->filter(fn (Nomina $n) => $n->esSoloDaConocer())
+                        ->map(fn (Nomina $n) => [
+                            'id'     => $n->id,
+                            'nombre' => $n->academico->name,
+                            'rut'    => $n->academico->rut,
+                            'cargo'  => $n->labelExclusionEvaluacion() ?? 'Se da a conocer',
+                        ])
+                        ->values();
+
                     return [
                         'id'        => $f->id,
                         'nombre'    => $f->nombre,
                         'academicos' => $academicos,
+                        'da_conocer' => $daConocer,
                         'stats'  => [
                             'total'                => $total,
                             'evaluados'            => $evaluados,
                             'apel_pendientes'      => $apelPendientes,
+                            'reeval_cca_pendientes'=> $reevalCcaPendientes,
                             'ccda_pendientes'      => $ccdaPendientes,
                             'proceso_cerrado'      => $actaCierre,
                             'lista_para_verificar' => $evaluados === $total
+                                && $total > 0
                                 && $apelPendientes === 0
+                                && $reevalCcaPendientes === 0
                                 && $ccdaPendientes === 0
                                 && $actaCierre,
                         ],

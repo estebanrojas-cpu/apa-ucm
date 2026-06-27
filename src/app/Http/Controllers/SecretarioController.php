@@ -32,6 +32,7 @@ class SecretarioController extends Controller
         $actaCierre        = null;
         $puedesCerrarProceso = false;
         $motivoNoPuede     = null;
+        $requisitosCierre  = [];
 
         if ($periodo && $user->facultad_id) {
             $expedientes = Nomina::with(['academico', 'apelacion', 'solicitudes'])
@@ -83,6 +84,9 @@ class SecretarioController extends Controller
                     'url'   => route('secretario.acta-cierre', $actaModel->id),
                 ];
             } else {
+                $requisitosCierre = $this->requisitosCierreProceso(
+                    $periodo->id, $user->facultad_id, $plazoModel
+                );
                 [$puedesCerrarProceso, $motivoNoPuede] = $this->verificarCierreProceso(
                     $periodo->id, $user->facultad_id, $plazoModel
                 );
@@ -96,6 +100,7 @@ class SecretarioController extends Controller
             'actaCierre'           => $actaCierre,
             'puedesCerrarProceso'  => $puedesCerrarProceso,
             'motivoNoPuede'        => $motivoNoPuede,
+            'requisitosCierre'     => $requisitosCierre,
         ]);
     }
 
@@ -218,7 +223,11 @@ class SecretarioController extends Controller
             ->whereHas('academico', fn ($q) => $q->where('facultad_id', $facultadId))
             ->get();
 
-        $conApelacionPendiente = $nominas->filter(
+        $evaluables = $nominas->filter(
+            fn ($n) => $n->participaEvaluacionFormal() && !$n->esSoloDaConocer()
+        );
+
+        $conApelacionPendiente = $evaluables->filter(
             fn ($n) => $n->apelacion && in_array($n->apelacion->estado, ['solicitada', 'en_revision'])
         )->count();
 
@@ -226,10 +235,16 @@ class SecretarioController extends Controller
             return [false, "Hay {$conApelacionPendiente} apelación(es) pendiente(s) de resolver."];
         }
 
-        $sinEvaluar = $nominas->filter(
-            fn ($n) => $n->participaEvaluacionFormal()
-                && !$n->esSoloDaConocer()
-                && !in_array($n->estado, ['evaluado', 'cerrado'])
+        $reevalCcaPendiente = $evaluables->filter(
+            fn ($n) => $n->requiereReevaluacionApelacionCca()
+        )->count();
+
+        if ($reevalCcaPendiente > 0) {
+            return [false, "Hay {$reevalCcaPendiente} apelación(es) pendiente(s) de re-evaluación por la CCA."];
+        }
+
+        $sinEvaluar = $evaluables->filter(
+            fn ($n) => !in_array($n->estado, ['evaluado', 'cerrado'])
         )->count();
 
         if ($sinEvaluar > 0) {
@@ -237,6 +252,50 @@ class SecretarioController extends Controller
         }
 
         return [true, null];
+    }
+
+    /** @return list<array{label: string, ok: bool}> */
+    private function requisitosCierreProceso(string $periodoId, string $facultadId, ?PlazoFacultad $plazo): array
+    {
+        $nominas = Nomina::with('apelacion')
+            ->where('periodo_id', $periodoId)
+            ->whereHas('academico', fn ($q) => $q->where('facultad_id', $facultadId))
+            ->get();
+
+        $evaluables = $nominas->filter(
+            fn ($n) => $n->participaEvaluacionFormal() && !$n->esSoloDaConocer()
+        );
+
+        $recepcionCerrada = $plazo?->estaCerradoFormalmente() ?? false;
+
+        $apelPendientes = $evaluables->filter(
+            fn ($n) => $n->apelacion && in_array($n->apelacion->estado, ['solicitada', 'en_revision'])
+        )->count();
+
+        $reevalCca = $evaluables->filter(fn ($n) => $n->requiereReevaluacionApelacionCca())->count();
+
+        $sinEvaluar = $evaluables->filter(
+            fn ($n) => !in_array($n->estado, ['evaluado', 'cerrado'])
+        )->count();
+
+        return [
+            [
+                'label' => 'Recepción de evidencias cerrada formalmente',
+                'ok'    => $recepcionCerrada,
+            ],
+            [
+                'label' => 'Todos los expedientes evaluables con calificación final',
+                'ok'    => $evaluables->isNotEmpty() && $sinEvaluar === 0,
+            ],
+            [
+                'label' => 'Sin apelaciones pendientes de resolver',
+                'ok'    => $apelPendientes === 0,
+            ],
+            [
+                'label' => 'Sin apelaciones pendientes de re-evaluación CCA',
+                'ok'    => $reevalCca === 0,
+            ],
+        ];
     }
 
     public function cerrarProceso()
@@ -425,6 +484,14 @@ class SecretarioController extends Controller
         ]);
 
         if ($data['accion'] === 'completo') {
+            if (!$nomina->tieneCompromisoApaConfirmado()) {
+                return back()->with('error', 'No se puede marcar como completo sin declaración APA de I y II Semestre confirmada.');
+            }
+
+            if (!$nomina->evidenciasNormales()->exists()) {
+                return back()->with('error', 'No se puede marcar como completo sin evidencias cargadas.');
+            }
+
             $nomina->update([
                 'estado'                 => 'carga_cerrada',
                 'observacion_secretario' => null,
@@ -459,13 +526,7 @@ class SecretarioController extends Controller
             'cerrado_por' => $user->id,
         ]);
 
-        Nomina::where('periodo_id', $periodo->id)
-            ->whereHas('academico', fn ($q) => $q->where('facultad_id', $user->facultad_id))
-            ->whereIn('estado', ['pendiente', 'en_carga'])
-            ->evaluables()
-            ->update(['estado' => 'carga_cerrada']);
-
-        return back()->with('success', 'Recepción de evidencias cerrada formalmente. Todos los expedientes activos han sido cerrados.');
+        return back()->with('success', 'Recepción de evidencias cerrada formalmente. Los académicos ya no pueden subir nuevas evidencias.');
     }
 
     public function setPlazolicencia(Request $request, Nomina $nomina)

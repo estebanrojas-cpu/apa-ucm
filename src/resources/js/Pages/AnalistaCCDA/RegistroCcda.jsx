@@ -14,6 +14,37 @@ const ESTADO_CFG = {
     pendiente:         { cls: 'bg-gray-100 text-gray-500',   label: 'Pendiente' },
 };
 
+function DaConocerTable({ academicos }) {
+    if (!academicos?.length) return null;
+
+    return (
+        <div className="border-t border-gray-100 bg-slate-50/80">
+            <p className="px-5 py-2 text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                Se da a conocer — no participan de la evaluación CCA
+            </p>
+            <table className="w-full text-xs">
+                <thead>
+                    <tr className="border-b border-slate-200 text-slate-400 uppercase tracking-wide">
+                        <th className="text-left px-4 py-2 font-medium">Académico</th>
+                        <th className="text-left px-4 py-2 font-medium">Cargo</th>
+                    </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                    {academicos.map(ac => (
+                        <tr key={ac.id}>
+                            <td className="px-4 py-2.5">
+                                <p className="font-medium text-slate-700">{ac.nombre}</p>
+                                <p className="text-slate-400">{ac.rut}</p>
+                            </td>
+                            <td className="px-4 py-2.5 text-slate-600">{ac.cargo}</td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
+    );
+}
+
 function AcademicoTable({ academicos }) {
     return (
         <div className="overflow-x-auto">
@@ -136,7 +167,7 @@ function FacultadRow({ facultad, periodoId }) {
                     onClick={() => setOpen(o => !o)}
                     className="text-xs font-medium text-[#1B2D6B] hover:underline shrink-0"
                 >
-                    {open ? 'Ocultar académicos ▲' : `Ver académicos (${s.total}) ▼`}
+                    {open ? 'Ocultar académicos ▲' : `Ver académicos (${s.total}${facultad.da_conocer?.length ? ` + ${facultad.da_conocer.length} da conocer` : ''}) ▼`}
                 </button>
             </div>
 
@@ -150,6 +181,7 @@ function FacultadRow({ facultad, periodoId }) {
                         {nPend > 0 && <span className="text-gray-500">{nPend} pendientes</span>}
                     </div>
                     <AcademicoTable academicos={facultad.academicos} />
+                    <DaConocerTable academicos={facultad.da_conocer} />
                 </div>
             )}
 
@@ -159,6 +191,7 @@ function FacultadRow({ facultad, periodoId }) {
                     <div className="rounded-lg bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
                         Esta facultad aún no cumple todos los requisitos automáticos para ser verificada.
                         {s.apel_pendientes > 0 && <span className="block">· {s.apel_pendientes} apelación(es) pendiente(s).</span>}
+                        {s.reeval_cca_pendientes > 0 && <span className="block">· {s.reeval_cca_pendientes} apelación(es) pendiente(s) de re-evaluación CCA.</span>}
                         {s.ccda_pendientes > 0 && <span className="block">· {s.ccda_pendientes} apelación(es) CCDA sin resolver.</span>}
                         {!s.proceso_cerrado && <span className="block">· El secretario no ha cerrado el proceso.</span>}
                         {s.evaluados < s.total && <span className="block">· {s.total - s.evaluados} expediente(s) sin calificación.</span>}

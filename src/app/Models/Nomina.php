@@ -185,7 +185,11 @@ class Nomina extends Model
      */
     public function esSoloDaConocer(): bool
     {
-        if ($this->esDecano() || $this->esDirectorDepartamento()) {
+        if (app(\App\Services\CargoPeriodoService::class)->esDecanoPeriodo($this)) {
+            return true;
+        }
+
+        if ($this->esDecanoLegado()) {
             return true;
         }
 
@@ -194,19 +198,43 @@ class Nomina extends Model
             return false;
         }
 
-        return $user->hasAnyAssignedRole(['analista_ccda', 'vicerrectora']);
+        return $user->hasAnyAssignedRole(['analista_ccda', 'vicerrectora', 'super_admin']);
     }
 
-    /** Decano/a de facultad. */
+    /** Decano/a según asignación del período (preferido). */
     public function esDecano(): bool
+    {
+        if (app(\App\Services\CargoPeriodoService::class)->esDecanoPeriodo($this)) {
+            return true;
+        }
+
+        return $this->esDecanoLegado();
+    }
+
+    /** Fallback: cargo en texto SAPD (nóminas sin asignación explícita). */
+    public function esDecanoLegado(): bool
     {
         $posicion = mb_strtolower($this->nombre_posicion ?? '');
 
         return str_contains($posicion, 'decana') || str_contains($posicion, 'decano');
     }
 
-    /** Director/a de departamento académico. */
+    public function esDirectivoFacultad(): bool
+    {
+        if (app(\App\Services\CargoPeriodoService::class)->esDirectivoPeriodo($this)) {
+            return true;
+        }
+
+        return $this->esDirectorDepartamentoLegado();
+    }
+
+    /** @deprecated Use esDirectivoFacultad para informes del decano */
     public function esDirectorDepartamento(): bool
+    {
+        return $this->esDirectorDepartamentoLegado();
+    }
+
+    public function esDirectorDepartamentoLegado(): bool
     {
         $posicion = mb_strtolower($this->nombre_posicion ?? '');
 
@@ -219,13 +247,13 @@ class Nomina extends Model
 
     public function labelExclusionEvaluacion(): ?string
     {
-        if ($this->esDecano()) {
+        if (app(\App\Services\CargoPeriodoService::class)->esDecanoPeriodo($this)) {
             return 'Se da a conocer (decano/a)';
         }
-        if ($this->esDirectorDepartamento()) {
-            return 'Se da a conocer (director/a de departamento)';
+        if ($this->esDecanoLegado()) {
+            return 'Se da a conocer (decano/a)';
         }
-        if ($this->academico?->hasAnyAssignedRole(['analista_ccda', 'vicerrectora'])) {
+        if ($this->academico?->hasAnyAssignedRole(['analista_ccda', 'vicerrectora', 'super_admin'])) {
             return 'Se da a conocer (cargo institucional)';
         }
 
@@ -246,23 +274,20 @@ class Nomina extends Model
     public function scopeEvaluables($query)
     {
         return $query
+            ->whereDoesntHave('asignacionesCargo', fn ($q) => $q->where('cargo', 'decano'))
             ->where(function ($q) {
                 $q->whereNull('nombre_posicion')
                     ->orWhere(function ($q2) {
                         $q2->whereRaw('LOWER(nombre_posicion) NOT LIKE ?', ['%decana%'])
-                            ->whereRaw('LOWER(nombre_posicion) NOT LIKE ?', ['%decano%'])
-                            ->whereRaw('LOWER(nombre_posicion) NOT LIKE ?', ['%director%departamento%'])
-                            ->whereRaw('LOWER(nombre_posicion) NOT LIKE ?', ['%director%depto%'])
-                            ->whereRaw('LOWER(nombre_posicion) NOT LIKE ?', ['%directora%departamento%'])
-                            ->whereRaw('LOWER(nombre_posicion) NOT LIKE ?', ['%directora%depto%']);
+                            ->whereRaw('LOWER(nombre_posicion) NOT LIKE ?', ['%decano%']);
                     });
             })
             ->where(function ($q) {
                 $q->whereNull('user_id')
                     ->orWhereHas('academico', function ($uq) {
-                        $uq->whereNotIn('role', ['analista_ccda', 'vicerrectora'])
+                        $uq->whereNotIn('role', ['analista_ccda', 'vicerrectora', 'super_admin'])
                             ->whereDoesntHave('userRoles', fn ($rq) =>
-                                $rq->whereIn('role', ['analista_ccda', 'vicerrectora'])
+                                $rq->whereIn('role', ['analista_ccda', 'vicerrectora', 'super_admin'])
                             );
                     });
             });
@@ -377,6 +402,81 @@ class Nomina extends Model
         return $tieneS1 && $tieneS2;
     }
 
+    /** Expediente habilitado para evaluación CCA (S1+S2 APA confirmados, evidencias y cierre). */
+    public function listoParaEvaluacionCca(): bool
+    {
+        if ($this->esSoloDaConocer() || !$this->participaEvaluacionFormal()) {
+            return false;
+        }
+
+        if (!in_array($this->estado, ['carga_cerrada', 'en_evaluacion', 'evaluado'], true)) {
+            return false;
+        }
+
+        if (!$this->tieneCompromisoApaConfirmado()) {
+            return false;
+        }
+
+        if ($this->relationLoaded('evidenciasNormales')) {
+            return $this->evidenciasNormales->isNotEmpty();
+        }
+
+        return $this->evidenciasNormales()->exists();
+    }
+
+    public function motivoNoListoEvaluacionCca(): ?string
+    {
+        if ($this->listoParaEvaluacionCca()) {
+            return null;
+        }
+
+        if ($this->esSoloDaConocer() || !$this->participaEvaluacionFormal()) {
+            return 'No participa de evaluación formal este período.';
+        }
+
+        if (!in_array($this->estado, ['carga_cerrada', 'en_evaluacion', 'evaluado'], true)) {
+            return 'El expediente aún no está cerrado para evaluación.';
+        }
+
+        if (!$this->compromisos()->where('semestre', 'S1')->whereNotNull('confirmado_en')->exists()) {
+            return 'Falta confirmar la declaración APA del I Semestre.';
+        }
+
+        if (!$this->compromisos()->where('semestre', 'S2')->whereNotNull('confirmado_en')->exists()) {
+            return 'Falta confirmar la declaración APA del II Semestre.';
+        }
+
+        if ($this->relationLoaded('evidenciasNormales')
+            ? $this->evidenciasNormales->isEmpty()
+            : !$this->evidenciasNormales()->exists()) {
+            return 'No hay evidencias cargadas en el expediente.';
+        }
+
+        return 'El expediente no cumple los requisitos para evaluación CCA.';
+    }
+
+    /** Apelación cerrada por secretario y pendiente de re-evaluación CCA. */
+    public function requiereReevaluacionApelacionCca(): bool
+    {
+        $apelacion = $this->relationLoaded('apelacion') ? $this->apelacion : $this->apelacion()->first();
+
+        if (!$apelacion || $apelacion->estado !== 'resuelta') {
+            return false;
+        }
+
+        return !$this->calificacionFinal()->where('es_apelacion', true)->exists();
+    }
+
+    public function scopeListosEvaluacionCca($query)
+    {
+        return $query
+            ->evaluables()
+            ->whereIn('estado', ['carga_cerrada', 'en_evaluacion', 'evaluado'])
+            ->whereHas('compromisos', fn ($q) => $q->where('semestre', 'S1')->whereNotNull('confirmado_en'))
+            ->whereHas('compromisos', fn ($q) => $q->where('semestre', 'S2')->whereNotNull('confirmado_en'))
+            ->whereHas('evidenciasNormales');
+    }
+
     // ── Relaciones ───────────────────────────────────────────────────────
 
     public function periodo(): BelongsTo
@@ -430,6 +530,11 @@ class Nomina extends Model
     }
 
     /** Todos los compromisos APA (uno por semestre) */
+    public function asignacionesCargo(): HasMany
+    {
+        return $this->hasMany(AsignacionCargo::class);
+    }
+
     public function compromisos(): HasMany
     {
         return $this->hasMany(CompromisoApa::class)->orderBy('semestre');
@@ -442,7 +547,7 @@ class Nomina extends Model
     }
 
     /**
-     * Pesos APA ponderados por horas reales sumadas de todos los semestres confirmados.
+     * Pesos APA desde horas declaradas sumadas (S1+S2 confirmados).
      * Si no hay compromisos confirmados, cae al reglamento por categoría.
      *
      * @return array<string, float>  claves: docencia, investigacion, vinculacion, gestion, formacion
@@ -455,38 +560,12 @@ class Nomina extends Model
             return \App\Services\CalificacionCadService::pesosParaCategoria($categoria);
         }
 
-        $areas    = ['docencia', 'investigacion', 'extension', 'administracion'];
         $sumHoras = [];
-        foreach ($areas as $area) {
+        foreach (\App\Services\CalificacionCadService::AREAS_HORAS_PRINCIPALES as $area) {
             $sumHoras[$area] = (float) $confirmados->sum("hrs_{$area}");
         }
 
-        $total = array_sum($sumHoras);
-        if ($total <= 0) {
-            return \App\Services\CalificacionCadService::pesosParaCategoria($categoria);
-        }
-
-        $mapa   = ['docencia' => 'docencia', 'investigacion' => 'investigacion', 'extension' => 'vinculacion', 'administracion' => 'gestion'];
-        $pesos  = ['formacion' => 0.0];
-        $suma   = 0.0;
-        $lastKey = null;
-
-        foreach ($mapa as $area => $key) {
-            if ($sumHoras[$area] > 0) {
-                $pct          = round($sumHoras[$area] / $total * 100, 2);
-                $pesos[$key]  = $pct;
-                $suma        += $pct;
-                $lastKey      = $key;
-            } else {
-                $pesos[$key] = 0.0;
-            }
-        }
-
-        if ($lastKey !== null) {
-            $pesos[$lastKey] = round(100 - ($suma - $pesos[$lastKey]), 2);
-        }
-
-        return $pesos;
+        return \App\Services\CalificacionCadService::pesosDesdeHorasSumadas($sumHoras, $categoria);
     }
 
     public function calificacionFinal(): HasOne
@@ -501,6 +580,31 @@ class Nomina extends Model
                     LIMIT 1
                 )'
             );
+    }
+
+    public function calificacionesFinales(): HasMany
+    {
+        return $this->hasMany(CalificacionFinal::class);
+    }
+
+    /**
+     * Calificación que debe ver el académico: resultado de apelación si existe; si no, la original.
+     */
+    public function calificacionVigenteParaAcademico(): ?CalificacionFinal
+    {
+        $cfApelacion = $this->calificacionesFinales()
+            ->where('es_apelacion', true)
+            ->latest('created_at')
+            ->first();
+
+        if ($cfApelacion) {
+            return $cfApelacion;
+        }
+
+        return $this->calificacionesFinales()
+            ->where('es_apelacion', false)
+            ->latest('created_at')
+            ->first();
     }
 
     public function calificacionJefatura(): HasOne

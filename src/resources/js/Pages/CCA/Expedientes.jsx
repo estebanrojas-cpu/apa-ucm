@@ -6,6 +6,7 @@ const ESTADO_BADGE = {
     carga_cerrada: 'bg-blue-100 text-blue-700',
     en_evaluacion: 'bg-purple-100 text-purple-700',
     evaluado:      'bg-green-100 text-green-700',
+    apelacion:     'bg-orange-100 text-orange-800',
 };
 
 export default function Expedientes({
@@ -17,6 +18,8 @@ export default function Expedientes({
     const [busqueda,      setBusqueda]      = useState('');
     const [filtroEval,    setFiltroEval]    = useState('todos');
     const [filtroCategoria, setFiltroCategoria] = useState('todas');
+
+    const [filtroApelacion, setFiltroApelacion] = useState('todos');
 
     const categorias = useMemo(() => {
         const set = new Set(expedientes.map(e => e.categoria).filter(Boolean));
@@ -33,10 +36,12 @@ export default function Expedientes({
             }
             if (filtroEval === 'pendiente'  && exp.yo_evaluado)  return false;
             if (filtroEval === 'registrada' && !exp.yo_evaluado) return false;
+            if (filtroApelacion === 'apelacion' && !exp.en_apelacion) return false;
+            if (filtroApelacion === 'normal' && exp.en_apelacion) return false;
             if (filtroCategoria !== 'todas' && exp.categoria !== filtroCategoria) return false;
             return true;
         });
-    }, [expedientes, busqueda, filtroEval, filtroCategoria]);
+    }, [expedientes, busqueda, filtroEval, filtroCategoria, filtroApelacion]);
 
     return (
         <>
@@ -123,6 +128,16 @@ export default function Expedientes({
                                 <option value="registrada">Registrada</option>
                             </select>
 
+                            <select
+                                value={filtroApelacion}
+                                onChange={e => setFiltroApelacion(e.target.value)}
+                                className="text-sm border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-[#1B2D6B]/30 focus:border-[#1B2D6B] bg-white"
+                            >
+                                <option value="todos">Tipo: Todos</option>
+                                <option value="apelacion">Solo apelaciones</option>
+                                <option value="normal">Evaluación normal</option>
+                            </select>
+
                             {categorias.length > 1 && (
                                 <select
                                     value={filtroCategoria}
@@ -136,9 +151,9 @@ export default function Expedientes({
                                 </select>
                             )}
 
-                            {(busqueda || filtroEval !== 'todos' || filtroCategoria !== 'todas') && (
+                            {(busqueda || filtroEval !== 'todos' || filtroCategoria !== 'todas' || filtroApelacion !== 'todos') && (
                                 <button
-                                    onClick={() => { setBusqueda(''); setFiltroEval('todos'); setFiltroCategoria('todas'); }}
+                                    onClick={() => { setBusqueda(''); setFiltroEval('todos'); setFiltroCategoria('todas'); setFiltroApelacion('todos'); }}
                                     className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
                                 >
                                     Limpiar filtros
@@ -178,7 +193,11 @@ export default function Expedientes({
                                                     {exp.categoria ?? '—'}
                                                 </td>
                                                 <td className="px-5 py-3.5">
-                                                    <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${ESTADO_BADGE[exp.estado] ?? 'bg-gray-100 text-gray-600'}`}>
+                                                    <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full ${
+                                                        exp.en_apelacion
+                                                            ? ESTADO_BADGE.apelacion
+                                                            : (ESTADO_BADGE[exp.estado] ?? 'bg-gray-100 text-gray-600')
+                                                    }`}>
                                                         {exp.estado_label}
                                                     </span>
                                                     {exp.con_licencia && (
@@ -202,7 +221,7 @@ export default function Expedientes({
                                                         href={`/cca/expedientes/${exp.id}`}
                                                         className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-[#1B2D6B] text-white hover:bg-[#152558] transition-colors"
                                                     >
-                                                        {exp.estado === 'evaluado' && exp.yo_evaluado ? 'Ver' : 'Evaluar'}
+                                                        {exp.en_apelacion ? 'Re-evaluar apelación' : (exp.estado === 'evaluado' && exp.yo_evaluado ? 'Ver' : 'Evaluar')}
                                                     </Link>
                                                 </td>
                                             </tr>

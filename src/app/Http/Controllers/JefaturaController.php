@@ -23,6 +23,8 @@ class JefaturaController extends Controller
         $fechaInicioJefatura = null;
 
         if ($periodo && $user->facultad_id) {
+            $esDirector = $user->hasAnyAssignedRole(['director_departamento', 'jefe_academico']);
+
             $etapa = Cronograma::where('periodo_id', $periodo->id)
                 ->where('etapa', 'informe_jefatura')
                 ->first();
@@ -32,8 +34,8 @@ class JefaturaController extends Controller
                 $fechaInicioJefatura = $etapa->fecha_inicio->format('d/m/Y');
             }
 
-            if ($etapaHabilitada) {
-                $query = Nomina::with(['academico.departamento', 'calificacionJefatura'])
+            if ($etapaHabilitada && $esDirector) {
+                $query = Nomina::with(['academico.departamento', 'calificacionJefatura', 'asignacionesCargo'])
                     ->where('periodo_id', $periodo->id)
                     ->evaluables()
                     ->whereHas('academico', function ($q) use ($user) {
@@ -44,7 +46,9 @@ class JefaturaController extends Controller
                     })
                     ->whereIn('estado', ['evaluado', 'apelado', 'cerrado']);
 
-                $academicos = $query->get()->map(fn ($n) => [
+                $academicos = $query->get()
+                    ->reject(fn (Nomina $n) => $n->esDirectivoFacultad())
+                    ->map(fn ($n) => [
                     'id'            => $n->id,
                     'estado'        => $n->estado,
                     'academico'     => [
@@ -55,7 +59,7 @@ class JefaturaController extends Controller
                     'tiene_informe' => $n->calificacionJefatura !== null,
                     'puntaje'       => $n->calificacionJefatura?->puntaje,
                     'calificacion'  => $n->calificacionJefatura?->calificacionLabel(),
-                ]);
+                ])->values();
             }
         }
 

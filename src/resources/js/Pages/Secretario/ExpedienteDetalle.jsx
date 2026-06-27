@@ -416,8 +416,7 @@ function ApelacionPanel({ apelacion, nominaId, categorias = [], evidenciasApelac
             {apelacion.estado === 'en_revision' && (
                 <form onSubmit={submitCerrar} className="border-t border-gray-100 pt-4">
                     <p className="text-xs text-gray-500 mb-3">
-                        Al enviar, el sistema determinará automáticamente si la apelación va a la CCA
-                        (calificación Excelente / Muy Bueno / Bueno) o a la CCDA (Regular / Deficiente).
+                        Al enviar, el expediente quedará disponible para que la CCA re-evalúe la apelación.
                     </p>
                     <div className="flex justify-end">
                         <button type="submit" disabled={cerrarForm.processing}

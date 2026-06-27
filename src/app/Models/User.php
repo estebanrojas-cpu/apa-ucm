@@ -55,8 +55,8 @@ class User extends Authenticatable
         $sessionRole = session('active_role');
 
         if ($sessionRole) {
-            $assigned = $this->assignedRoles();
-            if (in_array($sessionRole, $assigned, true)) {
+            $roles = $this->rolesParaSesion();
+            if (in_array($sessionRole, $roles, true)) {
                 return $sessionRole;
             }
         }
@@ -78,13 +78,30 @@ class User extends Authenticatable
         return $this->role ? [$this->role] : [];
     }
 
-    /** Roles asignados + miembro_cca si integra comisión confirmada del período activo. */
+    /** Roles asignados en BD + cargos del período activo + CCA confirmada. */
     public function rolesParaSesion(): array
     {
         $roles = $this->assignedRoles();
 
-        if ($this->puedeActuarComoCca() && !in_array('miembro_cca', $roles, true)) {
+        if ($this->hasAnyAssignedRole('director_departamento')) {
+            $roles[] = 'director_departamento';
+        }
+
+        $roles = array_merge($roles, app(\App\Services\CargoPeriodoService::class)->rolesSesionDesdeCargos($this));
+
+        if ($this->puedeActuarComoCca()) {
             $roles[] = 'miembro_cca';
+        }
+
+        $institucionales = ['super_admin', 'analista_ccda', 'vicerrectora', 'director_departamento'];
+        $tieneNominaPeriodo = $this->nominaActiva() !== null;
+
+        if ($tieneNominaPeriodo || ($this->nominas()->exists() && !$this->hasAnyAssignedRole($institucionales))) {
+            $roles[] = 'academico';
+        }
+
+        if ($roles === []) {
+            $roles[] = 'academico';
         }
 
         return array_values(array_unique($roles));

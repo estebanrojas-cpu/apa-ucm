@@ -29,7 +29,7 @@ function formatDate(dateStr) {
     return `${d}/${m}/${y}`;
 }
 
-export default function Expedientes({ periodo, expedientes, plazo, actaCierre, puedesCerrarProceso, motivoNoPuede }) {
+export default function Expedientes({ periodo, expedientes, plazo, actaCierre, puedesCerrarProceso, motivoNoPuede, requisitosCierre }) {
     const { flash, auth } = usePage().props;
     const facultad = auth.user.facultad?.nombre ?? '—';
 
@@ -262,7 +262,7 @@ export default function Expedientes({ periodo, expedientes, plazo, actaCierre, p
                     )
                 )}
 
-                {/* ── Cierre del proceso ─────────────────────── */}
+                {/* ── Cierre del proceso (acta) ───────────────── */}
                 {periodo && (
                     actaCierre ? (
                         <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-5 mb-6 flex items-center justify-between">
@@ -281,44 +281,69 @@ export default function Expedientes({ periodo, expedientes, plazo, actaCierre, p
                                 <PrintIcon /> Ver acta de cierre
                             </a>
                         </div>
-                    ) : plazo?.cerrado && (
-                        <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6 flex items-center justify-between">
+                    ) : (
+                        <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6 space-y-4">
                             <div>
-                                <p className="text-sm font-semibold text-gray-800">Cierre formal del proceso</p>
-                                {puedesCerrarProceso ? (
-                                    <p className="text-xs text-gray-500 mt-0.5">
-                                        Todos los expedientes están evaluados y sin apelaciones pendientes.
-                                    </p>
-                                ) : (
-                                    <p className="text-xs text-amber-600 mt-0.5">{motivoNoPuede}</p>
+                                <p className="text-sm font-semibold text-gray-800">Acta de cierre del proceso</p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Paso final de la facultad: después de que la CCA evaluó a todos,
+                                    se resolvieron las apelaciones y la CCA re-evaluó las que correspondan,
+                                    el secretario cierra el proceso y se genera el acta PDF.
+                                </p>
+                            </div>
+
+                            {requisitosCierre?.length > 0 && (
+                                <ul className="space-y-1.5">
+                                    {requisitosCierre.map((req, i) => (
+                                        <li key={i} className="flex items-center gap-2 text-xs">
+                                            <span className={req.ok ? 'text-green-600 font-bold' : 'text-gray-300'}>
+                                                {req.ok ? '✓' : '○'}
+                                            </span>
+                                            <span className={req.ok ? 'text-green-800' : 'text-gray-600'}>
+                                                {req.label}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
+
+                            <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+                                <div>
+                                    {puedesCerrarProceso ? (
+                                        <p className="text-xs text-green-700 font-medium">
+                                            Requisitos cumplidos — puede generar el acta de cierre.
+                                        </p>
+                                    ) : (
+                                        <p className="text-xs text-amber-600">{motivoNoPuede ?? 'Aún no se cumplen todos los requisitos.'}</p>
+                                    )}
+                                </div>
+                                {puedesCerrarProceso && (
+                                    !confirmCierreProceso ? (
+                                        <button
+                                            onClick={() => setConfirmCierreProceso(true)}
+                                            className="ml-4 shrink-0 px-4 py-2 border border-indigo-300 text-indigo-700 text-sm font-medium rounded-lg hover:bg-indigo-50 transition-colors"
+                                        >
+                                            Cerrar proceso y generar acta
+                                        </button>
+                                    ) : (
+                                        <div className="ml-4 shrink-0 flex items-center gap-3 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2">
+                                            <p className="text-xs text-indigo-700 font-medium">¿Confirmar? Se generará el acta de cierre PDF.</p>
+                                            <button
+                                                onClick={ejecutarCierreProceso}
+                                                className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 transition-colors"
+                                            >
+                                                Confirmar
+                                            </button>
+                                            <button
+                                                onClick={() => setConfirmCierreProceso(false)}
+                                                className="text-xs text-gray-500 hover:text-gray-700"
+                                            >
+                                                Cancelar
+                                            </button>
+                                        </div>
+                                    )
                                 )}
                             </div>
-                            {puedesCerrarProceso && (
-                                !confirmCierreProceso ? (
-                                    <button
-                                        onClick={() => setConfirmCierreProceso(true)}
-                                        className="ml-4 shrink-0 px-4 py-2 border border-indigo-300 text-indigo-700 text-sm font-medium rounded-lg hover:bg-indigo-50 transition-colors"
-                                    >
-                                        Cerrar proceso
-                                    </button>
-                                ) : (
-                                    <div className="ml-4 shrink-0 flex items-center gap-3 bg-indigo-50 border border-indigo-200 rounded-lg px-4 py-2">
-                                        <p className="text-xs text-indigo-700 font-medium">¿Confirmar cierre? Se generará el acta de cierre.</p>
-                                        <button
-                                            onClick={ejecutarCierreProceso}
-                                            className="px-3 py-1.5 bg-indigo-600 text-white text-xs font-semibold rounded-lg hover:bg-indigo-700 transition-colors"
-                                        >
-                                            Confirmar
-                                        </button>
-                                        <button
-                                            onClick={() => setConfirmCierreProceso(false)}
-                                            className="text-xs text-gray-500 hover:text-gray-700"
-                                        >
-                                            Cancelar
-                                        </button>
-                                    </div>
-                                )
-                            )}
                         </div>
                     )
                 )}

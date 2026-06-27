@@ -52,13 +52,16 @@ class AuthController extends Controller
     public static function dashboardRouteFor(?string $role): string
     {
         return match ($role) {
-            'analista_ccda'  => route('analista.dashboard'),
-            'secretario'     => route('secretario.dashboard'),
-            'miembro_cca'    => route('cca.dashboard'),
-            'jefe_academico' => route('jefe.dashboard'),
-            'vicerrectora'   => route('vicerrectora.dashboard'),
-            'academico'      => route('academico.dashboard'),
-            default          => route('login'),
+            'super_admin'           => route('super-admin.usuarios'),
+            'analista_ccda'         => route('analista.dashboard'),
+            'secretario'            => route('secretario.dashboard'),
+            'miembro_cca'           => route('cca.dashboard'),
+            'director_departamento' => route('jefe.dashboard'),
+            'jefe_academico'        => route('jefe.dashboard'),
+            'decano'                => route('decano.directivos'),
+            'vicerrectora'          => route('vicerrectora.dashboard'),
+            'academico'             => route('academico.dashboard'),
+            default                 => route('login'),
         };
     }
 

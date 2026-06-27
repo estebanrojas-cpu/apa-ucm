@@ -6,6 +6,7 @@ use App\Models\CompromisoApa;
 use App\Models\ConfiguracionApa;
 use App\Models\Nomina;
 use App\Models\Periodo;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -13,7 +14,7 @@ use Inertia\Response;
 
 class CompromisoApaController extends Controller
 {
-    public function showDeclaracion(string $semestre = 'S1'): Response
+    public function showDeclaracion(string $semestre = 'S1'): Response|RedirectResponse
     {
         if (!in_array($semestre, ['S1', 'S2'])) {
             abort(404);

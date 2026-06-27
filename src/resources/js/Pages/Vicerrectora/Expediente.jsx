@@ -93,7 +93,7 @@ export default function Expediente({ nomina }) {
                 {apelacion && (
                     <div className="bg-white rounded-xl border border-amber-200 p-5 mb-4">
                         <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide mb-2">
-                            Apelación — nivel {apelacion.destino === 'ccda' ? 'CCDA' : 'CCA'}
+                            Apelación — re-evaluación CCA
                         </p>
                         <div className="flex items-center gap-2 mb-2">
                             <span className="text-xs font-medium bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full capitalize">
