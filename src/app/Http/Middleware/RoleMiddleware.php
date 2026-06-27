@@ -2,7 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\CargoFacultad;
 use App\Http\Controllers\AuthController;
+use App\Services\CargoPeriodoService;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -40,6 +42,28 @@ class RoleMiddleware
             return redirect()
                 ->to(AuthController::dashboardRouteFor($fallback))
                 ->with('error', 'No está designado en la comisión evaluadora del período activo.');
+        }
+
+        if ($activeRole === 'secretario' && in_array('secretario', $roles, true)) {
+            $cargos = app(CargoPeriodoService::class);
+            if (!$cargos->tieneCargo($user, CargoFacultad::Secretario)) {
+                $fallback = in_array('academico', $user->rolesParaSesion(), true) ? 'academico' : $activeRole;
+
+                return redirect()
+                    ->to(AuthController::dashboardRouteFor($fallback))
+                    ->with('error', 'No está designado como secretario/a en el período activo.');
+            }
+        }
+
+        if ($activeRole === 'decano' && in_array('decano', $roles, true)) {
+            $cargos = app(CargoPeriodoService::class);
+            if (!$cargos->tieneCargo($user, CargoFacultad::Decano)) {
+                $fallback = in_array('academico', $user->rolesParaSesion(), true) ? 'academico' : $activeRole;
+
+                return redirect()
+                    ->to(AuthController::dashboardRouteFor($fallback))
+                    ->with('error', 'No está designado como decano/a en el período activo.');
+            }
         }
 
         if ($activeRole === 'academico' && $user->bloqueado_por_licencia && !$request->routeIs('logout')) {

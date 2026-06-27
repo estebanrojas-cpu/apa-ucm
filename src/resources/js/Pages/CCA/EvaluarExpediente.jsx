@@ -1,5 +1,5 @@
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { useMemo } from 'react';
+import { Fragment, useMemo } from 'react';
 import AppLayout from '@/Layouts/AppLayout';
 
 const ESTADOS = {
@@ -40,6 +40,105 @@ const SLUG_A_REGLAMENTO = {
     formacion_continua: 'formacion',
 };
 
+const AREAS_HORAS = [
+    { key: 'hrs_docencia',       label: 'Actividades de Docencia' },
+    { key: 'hrs_investigacion',  label: 'Actividades de Investigación' },
+    { key: 'hrs_extension',      label: 'Extensión y Vinculación' },
+    { key: 'hrs_administracion', label: 'Administración Académica' },
+    { key: 'hrs_otras',          label: 'Otras actividades autorizadas' },
+];
+
+const AREAS_HORAS_MAIN = AREAS_HORAS.filter(a => a.key !== 'hrs_otras');
+
+function horasRealesVacias() {
+    return {
+        S1: Object.fromEntries(AREAS_HORAS.map(a => [a.key, ''])),
+        S2: Object.fromEntries(AREAS_HORAS.map(a => [a.key, ''])),
+    };
+}
+
+function horasRealesDesdeEvaluacion(miEvaluacion) {
+    const out = horasRealesVacias();
+    if (!miEvaluacion?.horas_reales) return out;
+    for (const sem of ['S1', 'S2']) {
+        for (const { key } of AREAS_HORAS) {
+            const val = miEvaluacion.horas_reales[sem]?.[key];
+            out[sem][key] = val != null ? String(val) : '';
+        }
+    }
+    return out;
+}
+
+function totalHorasMain(horasObj) {
+    return AREAS_HORAS_MAIN.reduce((s, { key }) => s + (parseFloat(horasObj?.[key]) || 0), 0);
+}
+
+function fmtHoras(n) {
+    return (parseFloat(n) || 0).toFixed(1);
+}
+
+function deltaClass(delta) {
+    if (Math.abs(delta) < 0.05) return 'text-gray-500';
+    return delta > 0 ? 'text-amber-700 font-medium' : 'text-blue-700 font-medium';
+}
+
+const HRS_KEY_A_AREA = {
+    hrs_docencia:       'docencia',
+    hrs_investigacion:  'investigacion',
+    hrs_extension:      'extension',
+    hrs_administracion: 'administracion',
+};
+
+const AREA_A_REG = {
+    docencia:      'docencia',
+    investigacion: 'investigacion',
+    extension:     'vinculacion',
+    administracion:'gestion',
+};
+
+function calcularPesosDesdeHorasReales(horasReales) {
+    if (!horasReales?.S1 || !horasReales?.S2) return null;
+
+    for (const sem of ['S1', 'S2']) {
+        for (const { key } of AREAS_HORAS_MAIN) {
+            const v = horasReales[sem][key];
+            if (v === '' || v == null || isNaN(parseFloat(v))) return null;
+        }
+    }
+
+    const sumHoras = { docencia: 0, investigacion: 0, extension: 0, administracion: 0 };
+    for (const sem of ['S1', 'S2']) {
+        for (const [hrsKey, area] of Object.entries(HRS_KEY_A_AREA)) {
+            sumHoras[area] += parseFloat(horasReales[sem][hrsKey]) || 0;
+        }
+    }
+
+    const total = Object.values(sumHoras).reduce((a, b) => a + b, 0);
+    if (total <= 0) return null;
+
+    const pesos = { formacion: 0 };
+    let suma = 0;
+    let lastKey = null;
+
+    for (const [area, regKey] of Object.entries(AREA_A_REG)) {
+        const hrs = sumHoras[area];
+        if (hrs > 0) {
+            const pct = Math.round(hrs / total * 10000) / 100;
+            pesos[regKey] = pct;
+            suma += pct;
+            lastKey = regKey;
+        } else {
+            pesos[regKey] = 0;
+        }
+    }
+
+    if (lastKey) {
+        pesos[lastKey] = Math.round((100 - (suma - pesos[lastKey])) * 100) / 100;
+    }
+
+    return pesos;
+}
+
 function calcularNotaFinal(notas, categorias, pesosReglamento, extra = 0) {
     let suma = 0;
     categorias
@@ -63,9 +162,9 @@ function conceptoDesdeNota(nota) {
 }
 
 export default function EvaluarExpediente({
-    nomina, categorias, pesosReglamento, conteoEvidencias,
-    miEvaluacion, todasEvaluaciones, calificacionFinal, esApelacion, sinCompromisoApa,
-    compromisosSemestres,
+    nomina, categorias, pesosReglamento, conteoEvidencias, conteoEvidenciasApelacion = {},
+    miEvaluacion, todasEvaluaciones, calificacionFinal, calificacionOriginal,
+    esApelacion, apelacion, sinCompromisoApa, compromisosSemestres,
 }) {
     const { flash } = usePage().props;
     const badge = ESTADOS[nomina.estado] ?? { label: nomina.estado, cls: 'bg-gray-100 text-gray-600' };
@@ -74,6 +173,7 @@ export default function EvaluarExpediente({
     const evalForm = useForm({
         sin_calificacion:         miEvaluacion?.sin_calificacion         ?? false,
         motivo_sc:                miEvaluacion?.motivo_sc                ?? '',
+        horas_reales:             horasRealesDesdeEvaluacion(miEvaluacion),
         puntaje_docencia:         miEvaluacion?.puntaje_docencia         ?? 3.0,
         puntaje_investigacion:    miEvaluacion?.puntaje_investigacion    ?? 3.0,
         puntaje_vinculacion:      miEvaluacion?.puntaje_vinculacion      ?? 3.0,
@@ -84,14 +184,40 @@ export default function EvaluarExpediente({
 
     const finalForm = useForm({ observacion: '' });
 
+    const pesosEfectivos = useMemo(
+        () => calcularPesosDesdeHorasReales(evalForm.data.horas_reales) ?? pesosReglamento,
+        [evalForm.data.horas_reales, pesosReglamento]
+    );
+
     const notaCalculada = useMemo(
         () => evalForm.data.sin_calificacion
             ? 0
-            : calcularNotaFinal(evalForm.data, categorias, pesosReglamento, evalForm.data.extra_otras_actividades),
-        [evalForm.data, categorias, pesosReglamento]
+            : calcularNotaFinal(evalForm.data, categorias, pesosEfectivos, evalForm.data.extra_otras_actividades),
+        [evalForm.data, categorias, pesosEfectivos]
     );
 
     const conceptoCalculado = conceptoDesdeNota(notaCalculada);
+
+    const compromisosPorSemestre = useMemo(() => {
+        const map = {};
+        (compromisosSemestres ?? []).forEach(c => { map[c.semestre] = c; });
+        return map;
+    }, [compromisosSemestres]);
+
+    const horasContratoPorSemestre = {
+        S1: parseFloat(nomina.academico.horas_contrato_isem) || 0,
+        S2: parseFloat(nomina.academico.horas_contrato_iisem) || 0,
+    };
+
+    function setHoraReal(semestre, key, value) {
+        evalForm.setData('horas_reales', {
+            ...evalForm.data.horas_reales,
+            [semestre]: {
+                ...evalForm.data.horas_reales[semestre],
+                [key]: value,
+            },
+        });
+    }
 
     function submitEval(e) {
         e.preventDefault();
@@ -123,39 +249,26 @@ export default function EvaluarExpediente({
                     </div>
                 )}
 
-                {compromisosSemestres?.length > 0 && (
-                    <div className="mb-5 bg-white rounded-xl border border-gray-200 p-4">
-                        <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-3">
-                            Distribución APA declarada por semestre
+                {esApelacion && (
+                    <div className="mb-5 rounded-lg bg-orange-50 border border-orange-200 px-4 py-4 text-sm text-orange-900">
+                        <p className="font-semibold mb-1">Re-evaluación por apelación</p>
+                        <p className="text-orange-800 text-xs leading-relaxed">
+                            El secretario derivó este expediente a la CCA. Revise las evidencias originales del período
+                            y las nuevas de la apelación antes de registrar su evaluación.
                         </p>
-                        <div className="overflow-x-auto">
-                            <table className="w-full text-xs">
-                                <thead>
-                                    <tr className="bg-gray-50">
-                                        <th className="text-left px-3 py-2 font-medium text-gray-600">Semestre</th>
-                                        <th className="text-center px-2 py-2 font-medium text-gray-600">Docencia</th>
-                                        <th className="text-center px-2 py-2 font-medium text-gray-600">Investigación</th>
-                                        <th className="text-center px-2 py-2 font-medium text-gray-600">Extensión</th>
-                                        <th className="text-center px-2 py-2 font-medium text-gray-600">Gestión</th>
-                                        <th className="text-center px-2 py-2 font-medium text-gray-600">Otras</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-50">
-                                    {compromisosSemestres.map(c => (
-                                        <tr key={c.semestre} className="hover:bg-gray-50/60">
-                                            <td className="px-3 py-2 font-medium text-gray-700">{c.label}</td>
-                                            <td className="px-2 py-2 text-center text-gray-600">{c.pct_docencia}%</td>
-                                            <td className="px-2 py-2 text-center text-gray-600">{c.pct_investigacion}%</td>
-                                            <td className="px-2 py-2 text-center text-gray-600">{c.pct_extension}%</td>
-                                            <td className="px-2 py-2 text-center text-gray-600">{c.pct_administracion}%</td>
-                                            <td className="px-2 py-2 text-center text-gray-600">{c.pct_otras}%</td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
+                        {calificacionOriginal && (
+                            <p className="mt-2 text-xs font-medium">
+                                Calificación original: {calificacionOriginal.concepto_label} ({calificacionOriginal.nota_final}/5.0)
+                            </p>
+                        )}
+                        {apelacion?.motivo && (
+                            <p className="mt-2 text-xs text-orange-700 line-clamp-3">
+                                Motivo: {apelacion.motivo}
+                            </p>
+                        )}
                     </div>
                 )}
+
                 {flash?.success && (
                     <div className="mb-5 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
                         {flash.success}
@@ -233,6 +346,141 @@ export default function EvaluarExpediente({
                     </div>
                 )}
 
+                <form onSubmit={submitEval} className="space-y-6">
+                {compromisosSemestres?.length > 0 && (
+                    <div className="bg-white rounded-xl border border-[#1B2D6B]/20 p-5">
+                        <div className="mb-4">
+                            <h2 className="text-sm font-semibold text-[#1B2D6B] uppercase tracking-wide">
+                                Comparación horas APA — declaradas vs reales
+                            </h2>
+                            <p className="text-xs text-gray-500 mt-1">
+                                Revise la evidencia y registre las horas que el académico ocupó efectivamente,
+                                comparadas con lo declarado en su APA de cada semestre.
+                            </p>
+                        </div>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-xs border-collapse">
+                                <thead>
+                                    <tr className="bg-gray-50 text-gray-600">
+                                        <th className="text-left px-3 py-2 font-medium border-b border-gray-200" rowSpan={2}>Área</th>
+                                        {['S1', 'S2'].filter(s => compromisosPorSemestre[s]).map(sem => (
+                                            <th key={sem} colSpan={3}
+                                                className="text-center px-2 py-2 font-semibold border-b border-gray-200 border-l border-gray-200 text-[#1B2D6B]">
+                                                {compromisosPorSemestre[sem]?.label ?? sem}
+                                                {horasContratoPorSemestre[sem] > 0 && (
+                                                    <span className="block font-normal text-gray-400 text-[10px]">
+                                                        Contrato: {fmtHoras(horasContratoPorSemestre[sem])} h
+                                                    </span>
+                                                )}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                    <tr className="bg-gray-50 text-gray-500">
+                                        {['S1', 'S2'].filter(s => compromisosPorSemestre[s]).map(sem => (
+                                            <Fragment key={sem}>
+                                                <th className="text-center px-2 py-1.5 font-medium border-b border-gray-200 border-l border-gray-200">
+                                                    Declaradas
+                                                </th>
+                                                <th className="text-center px-2 py-1.5 font-medium border-b border-gray-200">
+                                                    Reales (CCA)
+                                                </th>
+                                                <th className="text-center px-2 py-1.5 font-medium border-b border-gray-200">
+                                                    Δ
+                                                </th>
+                                            </Fragment>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                    {AREAS_HORAS.map(({ key, label }) => (
+                                        <tr key={key} className="hover:bg-gray-50/50">
+                                            <td className="px-3 py-2 text-gray-700 font-medium">{label}</td>
+                                            {['S1', 'S2'].filter(s => compromisosPorSemestre[s]).map(sem => {
+                                                const declarado = parseFloat(compromisosPorSemestre[sem]?.[key]) || 0;
+                                                const realStr   = evalForm.data.horas_reales[sem]?.[key] ?? '';
+                                                const real      = parseFloat(realStr) || 0;
+                                                const delta     = realStr !== '' ? real - declarado : null;
+                                                const errKey    = `horas_reales.${sem}.${key}`;
+                                                return (
+                                                    <Fragment key={sem}>
+                                                        <td
+                                                            className="px-2 py-2 text-center tabular-nums text-gray-600 border-l border-gray-100 bg-gray-50/60">
+                                                            {fmtHoras(declarado)} h
+                                                        </td>
+                                                        <td className="px-2 py-1.5 text-center">
+                                                            <input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.1"
+                                                                value={realStr}
+                                                                disabled={bloqueado || evalForm.data.sin_calificacion}
+                                                                onChange={e => setHoraReal(sem, key, e.target.value)}
+                                                                placeholder="0.0"
+                                                                className="w-20 mx-auto block border border-gray-300 rounded px-2 py-1 text-center text-[#1B2D6B] font-medium focus:outline-none focus:ring-2 focus:ring-[#1B2D6B]/30 disabled:bg-gray-100 disabled:text-gray-500"
+                                                            />
+                                                            {evalForm.errors[errKey] && (
+                                                                <p className="text-[10px] text-red-600 mt-0.5">{evalForm.errors[errKey]}</p>
+                                                            )}
+                                                        </td>
+                                                        <td
+                                                            className={`px-2 py-2 text-center tabular-nums ${delta != null ? deltaClass(delta) : 'text-gray-300'}`}>
+                                                            {delta != null
+                                                                ? `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}`
+                                                                : '—'}
+                                                        </td>
+                                                    </Fragment>
+                                                );
+                                            })}
+                                        </tr>
+                                    ))}
+                                    <tr className="bg-blue-50/70 font-semibold text-blue-900">
+                                        <td className="px-3 py-2">Total (sin otras)</td>
+                                        {['S1', 'S2'].filter(s => compromisosPorSemestre[s]).map(sem => {
+                                            const decl = totalHorasMain(compromisosPorSemestre[sem]);
+                                            const real = totalHorasMain(evalForm.data.horas_reales[sem]);
+                                            const realFilled = AREAS_HORAS_MAIN.some(
+                                                ({ key }) => (evalForm.data.horas_reales[sem]?.[key] ?? '') !== ''
+                                            );
+                                            const delta = realFilled ? real - decl : null;
+                                            const contrato = horasContratoPorSemestre[sem];
+                                            const diffContrato = realFilled && contrato > 0
+                                                ? Math.abs(real - contrato) > 0.05
+                                                : false;
+                                            return (
+                                                <Fragment key={sem}>
+                                                    <td
+                                                        className="px-2 py-2 text-center tabular-nums border-l border-blue-100">
+                                                        {fmtHoras(decl)} h
+                                                    </td>
+                                                    <td className="px-2 py-2 text-center tabular-nums">
+                                                        {realFilled ? `${fmtHoras(real)} h` : '—'}
+                                                        {diffContrato && (
+                                                            <p className="text-[10px] font-normal text-amber-700 mt-0.5">
+                                                                ≠ contrato ({fmtHoras(contrato)} h)
+                                                            </p>
+                                                        )}
+                                                    </td>
+                                                    <td
+                                                        className={`px-2 py-2 text-center tabular-nums ${delta != null ? deltaClass(delta) : ''}`}>
+                                                        {delta != null
+                                                            ? `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}`
+                                                            : '—'}
+                                                    </td>
+                                                </Fragment>
+                                            );
+                                        })}
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        {evalForm.data.sin_calificacion && (
+                            <p className="mt-3 text-xs text-gray-400 italic">
+                                Sin calificación: las horas reales son opcionales.
+                            </p>
+                        )}
+                    </div>
+                )}
+
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
                     {/* Evidencias */}
@@ -240,9 +488,16 @@ export default function EvaluarExpediente({
                         <h2 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
                             Documentación entregada
                         </h2>
+                        {esApelacion && (
+                            <p className="text-xs text-gray-500 mb-3">
+                                Se muestran archivos del período y, en naranja, los agregados en la apelación.
+                            </p>
+                        )}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {categorias.map(cat => {
-                                const total = conteoEvidencias[cat.id] ?? 0;
+                                const normales  = conteoEvidencias[cat.id] ?? 0;
+                                const apelacion = conteoEvidenciasApelacion[cat.id] ?? 0;
+                                const total     = normales + apelacion;
                                 return (
                                     <Link
                                         key={cat.id}
@@ -255,11 +510,21 @@ export default function EvaluarExpediente({
                                             </h3>
                                             <span className="text-[#1B2D6B] text-sm font-bold shrink-0">→</span>
                                         </div>
-                                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-                                            total > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
-                                        }`}>
-                                            {total} {total === 1 ? 'archivo' : 'archivos'}
-                                        </span>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                                normales > 0 ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                                            }`}>
+                                                {normales} {normales === 1 ? 'archivo' : 'archivos'}
+                                            </span>
+                                            {esApelacion && apelacion > 0 && (
+                                                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-orange-100 text-orange-700">
+                                                    +{apelacion} apelación
+                                                </span>
+                                            )}
+                                            {total === 0 && (
+                                                <span className="text-xs text-gray-400">Sin archivos</span>
+                                            )}
+                                        </div>
                                     </Link>
                                 );
                             })}
@@ -269,7 +534,9 @@ export default function EvaluarExpediente({
                     {/* Formulario evaluación */}
                     <div>
                         <h2 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wide">
-                            {miEvaluacion ? 'Mi evaluación' : 'Registrar evaluación'}
+                            {esApelacion
+                                ? (miEvaluacion ? 'Mi evaluación de apelación' : 'Registrar evaluación de apelación')
+                                : (miEvaluacion ? 'Mi evaluación' : 'Registrar evaluación')}
                         </h2>
 
                         {miEvaluacion && (
@@ -284,9 +551,10 @@ export default function EvaluarExpediente({
                                     El expediente ya tiene calificación final. No registró evaluación.
                                 </p>
                             ) : (
-                                <form onSubmit={submitEval} className="space-y-4">
+                                <div className="space-y-4">
                                     <p className="text-xs text-gray-500">
-                                        Ingrese nota 1.0 – 5.0 por área. Fórmula: min(Σ(%T × N) / 100, 5.0)
+                                        Ingrese nota 1.0 – 5.0 por área. Los %T se calculan desde sus horas reales registradas.
+                                        Fórmula: min(Σ(%T × N) / 100, 5.0)
                                     </p>
 
                                     <label className="flex items-center gap-2 text-sm">
@@ -320,6 +588,9 @@ export default function EvaluarExpediente({
                                                         <label className="text-xs font-medium text-gray-700">
                                                             {AREA_LABELS[cat.slug] ?? cat.nombre}
                                                         </label>
+                                                        <span className="text-[10px] text-gray-400 tabular-nums">
+                                                            {Number(pesosEfectivos[SLUG_A_REGLAMENTO[cat.slug] ?? cat.slug] ?? 0).toFixed(2)}%T
+                                                        </span>
                                                     </div>
                                                     <input
                                                         type="number"
@@ -398,7 +669,7 @@ export default function EvaluarExpediente({
                                             {evalForm.processing ? 'Guardando...' : miEvaluacion ? 'Actualizar mi evaluación' : 'Guardar evaluación'}
                                         </button>
                                     )}
-                                </form>
+                                </div>
                             )}
                         </div>
 
@@ -415,35 +686,36 @@ export default function EvaluarExpediente({
                                 </ul>
                             </div>
                         )}
-
-                        {!bloqueado && todasEvaluaciones.length > 0 && (
-                            <div className="mt-4 bg-white rounded-xl border border-gray-200 p-5">
-                                <h3 className="text-sm font-semibold text-gray-800 mb-1">Registrar calificación final</h3>
-                                <p className="text-xs text-gray-500 mb-3">
-                                    Promedio de {todasEvaluaciones.length} evaluación(es) con fórmula CAD.
-                                </p>
-                                <form onSubmit={submitFinal} className="space-y-3">
-                                    <div>
-                                        <div className="flex justify-end mb-1">
-                                            <span className={`text-xs ${finalForm.data.observacion.length > 550 ? 'text-red-500 font-semibold' : 'text-gray-400'}`}>
-                                                {finalForm.data.observacion.length}/600
-                                            </span>
-                                        </div>
-                                        <textarea rows={2} value={finalForm.data.observacion}
-                                            maxLength={600}
-                                            onChange={e => finalForm.setData('observacion', e.target.value)}
-                                            placeholder="Observación general del CCA..."
-                                            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" />
-                                    </div>
-                                    <button type="submit" disabled={finalForm.processing}
-                                        className="px-5 py-2.5 bg-green-700 text-white text-sm font-medium rounded-lg hover:bg-green-800 disabled:opacity-40">
-                                        {finalForm.processing ? 'Registrando...' : 'Registrar calificación final'}
-                                    </button>
-                                </form>
-                            </div>
-                        )}
                     </div>
                 </div>
+                </form>
+
+                {!bloqueado && todasEvaluaciones.length > 0 && (
+                    <div className="mt-6 max-w-xl lg:ml-auto bg-white rounded-xl border border-gray-200 p-5">
+                        <h3 className="text-sm font-semibold text-gray-800 mb-1">Registrar calificación final</h3>
+                        <p className="text-xs text-gray-500 mb-3">
+                            Promedio de {todasEvaluaciones.length} evaluación(es) con fórmula CAD.
+                        </p>
+                        <form onSubmit={submitFinal} className="space-y-3">
+                            <div>
+                                <div className="flex justify-end mb-1">
+                                    <span className={`text-xs ${finalForm.data.observacion.length > 550 ? 'text-red-500 font-semibold' : 'text-gray-400'}`}>
+                                        {finalForm.data.observacion.length}/600
+                                    </span>
+                                </div>
+                                <textarea rows={2} value={finalForm.data.observacion}
+                                    maxLength={600}
+                                    onChange={e => finalForm.setData('observacion', e.target.value)}
+                                    placeholder="Observación general del CCA..."
+                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" />
+                            </div>
+                            <button type="submit" disabled={finalForm.processing}
+                                className="px-5 py-2.5 bg-green-700 text-white text-sm font-medium rounded-lg hover:bg-green-800 disabled:opacity-40">
+                                {finalForm.processing ? 'Registrando...' : 'Registrar calificación final'}
+                            </button>
+                        </form>
+                    </div>
+                )}
             </AppLayout>
         </>
     );

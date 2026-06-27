@@ -24,13 +24,13 @@ const apelacionEstadosBase = {
     rechazada:  { label: 'Rechazada',                         cls: 'bg-red-50 border-red-200 text-red-800' },
 };
 
-function getApelacionInfo(ap) {
+function getApelacionInfo(ap, calificacion) {
     if (!ap) return null;
     if (ap.estado === 'resuelta') {
-        const label = ap.destino === 'ccda'
-            ? 'Resuelta — en revisión por CCDA'
-            : 'Resuelta — en re-evaluación CCA';
-        return { label, cls: 'bg-purple-50 border-purple-200 text-purple-800' };
+        if (calificacion?.es_apelacion || ap.reevaluacion_pendiente === false) {
+            return { label: 'Resuelta — calificación actualizada por CCA', cls: 'bg-green-50 border-green-200 text-green-800' };
+        }
+        return { label: 'Resuelta — en re-evaluación CCA', cls: 'bg-purple-50 border-purple-200 text-purple-800' };
     }
     return apelacionEstadosBase[ap.estado] ?? { label: ap.estado, cls: 'bg-gray-50 border-gray-200 text-gray-800' };
 }
@@ -81,9 +81,17 @@ export default function Academico({ stats, periodo, compromisoApa }) {
                         label="Calificación final"
                         value={
                             calificacion
-                                ? <span className={`text-xl font-bold ${califColors[calificacion.calificacion] ?? 'text-gray-900'}`}>
-                                    {calificacion.label}
-                                  </span>
+                                ? (
+                                    <div>
+                                        <span className={`text-xl font-bold ${califColors[calificacion.calificacion] ?? 'text-gray-900'}`}>
+                                            {Number(calificacion.nota_final).toFixed(2)}
+                                        </span>
+                                        <span className="text-sm text-gray-500 font-normal"> / 5.0</span>
+                                        <p className={`text-sm font-medium mt-0.5 ${califColors[calificacion.calificacion] ?? 'text-gray-700'}`}>
+                                            {calificacion.label}
+                                        </p>
+                                    </div>
+                                )
                                 : '—'
                         }
                     />
@@ -91,16 +99,32 @@ export default function Academico({ stats, periodo, compromisoApa }) {
 
                 {/* Banner calificación */}
                 {calificacion && (
-                    <div className="bg-green-50 border border-green-200 rounded-xl p-5 mb-6">
-                        <p className="text-xs font-semibold text-green-700 uppercase tracking-wide mb-1">
-                            Calificación APA — Resultado final
+                    <div className={`border rounded-xl p-5 mb-6 ${
+                        calificacion.pendiente_reevaluacion
+                            ? 'bg-amber-50 border-amber-200'
+                            : 'bg-green-50 border-green-200'
+                    }`}>
+                        <p className={`text-xs font-semibold uppercase tracking-wide mb-1 ${
+                            calificacion.pendiente_reevaluacion ? 'text-amber-700' : 'text-green-700'
+                        }`}>
+                            Calificación APA — {calificacion.es_apelacion ? 'Resultado de apelación' : 'Resultado final'}
                         </p>
-                        <p className={`text-3xl font-bold ${califColors[calificacion.calificacion]}`}>
-                            {calificacion.label}
-                        </p>
-                        <p className="text-sm text-green-700 mt-1">
-                            Puntaje: <span className="font-semibold">{calificacion.puntaje_total} / 100</span>
-                            <span className="mx-2 text-green-400">·</span>
+                        <div className="flex items-baseline gap-2 flex-wrap">
+                            <p className={`text-4xl font-bold ${califColors[calificacion.calificacion]}`}>
+                                {Number(calificacion.nota_final).toFixed(2)}
+                            </p>
+                            <span className={`text-lg font-medium ${califColors[calificacion.calificacion]}`}>/ 5.0</span>
+                            <span className={`text-lg font-semibold ml-2 ${califColors[calificacion.calificacion]}`}>
+                                — {calificacion.label}
+                            </span>
+                        </div>
+                        <p className={`text-sm mt-1 ${calificacion.pendiente_reevaluacion ? 'text-amber-700' : 'text-green-700'}`}>
+                            {calificacion.pendiente_reevaluacion && (
+                                <>
+                                    Calificación original vigente — sujeta a re-evaluación CCA por apelación.
+                                    <span className="mx-2 opacity-50">·</span>
+                                </>
+                            )}
                             Registrada el {calificacion.fecha}
                         </p>
                     </div>
@@ -108,10 +132,10 @@ export default function Academico({ stats, periodo, compromisoApa }) {
 
                 {/* Estado apelación activa */}
                 {apelacion && (
-                    <div className={`border rounded-xl p-5 mb-6 ${getApelacionInfo(apelacion)?.cls ?? 'bg-gray-50 border-gray-200'}`}>
+                    <div className={`border rounded-xl p-5 mb-6 ${getApelacionInfo(apelacion, calificacion)?.cls ?? 'bg-gray-50 border-gray-200'}`}>
                         <p className="text-xs font-semibold uppercase tracking-wide mb-1 opacity-70">Apelación</p>
                         <p className="text-sm font-semibold">
-                            {getApelacionInfo(apelacion)?.label ?? apelacion.estado}
+                            {getApelacionInfo(apelacion, calificacion)?.label ?? apelacion.estado}
                         </p>
                         {apelacion.resolucion && (
                             <p className="text-sm mt-1 opacity-80">{apelacion.resolucion}</p>

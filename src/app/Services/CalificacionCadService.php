@@ -3,9 +3,21 @@
 namespace App\Services;
 
 use App\Models\CompromisoApa;
+use App\Models\Evaluacion;
+use Illuminate\Support\Collection;
 
 class CalificacionCadService
 {
+    /** @var list<string> */
+    public const AREAS_HORAS_PRINCIPALES = ['docencia', 'investigacion', 'extension', 'administracion'];
+
+    /** clave reglamento → columna hrs_* */
+    public const REG_A_AREA_HRS = [
+        'docencia'      => 'docencia',
+        'investigacion' => 'investigacion',
+        'vinculacion'   => 'extension',
+        'gestion'       => 'administracion',
+    ];
     /** @var array<string, string> slug APA → campo evaluación */
     public const CAMPOS = [
         'docencia'      => 'puntaje_docencia',
@@ -52,6 +64,82 @@ class CalificacionCadService
     }
 
     /**
+     * % tiempo asignado a partir de horas sumadas S1+S2 por área (sin otras).
+     *
+     * @param  array<string, float>  $sumHoras  claves: docencia, investigacion, extension, administracion
+     * @return array<string, float>  claves: docencia, investigacion, vinculacion, gestion, formacion
+     */
+    public static function pesosDesdeHorasSumadas(array $sumHoras, ?string $categoria = null): array
+    {
+        $total = 0.0;
+        foreach (self::AREAS_HORAS_PRINCIPALES as $area) {
+            $total += (float) ($sumHoras[$area] ?? 0);
+        }
+
+        if ($total <= 0) {
+            return self::pesosParaCategoria($categoria);
+        }
+
+        $mapa    = ['docencia' => 'docencia', 'investigacion' => 'investigacion', 'extension' => 'vinculacion', 'administracion' => 'gestion'];
+        $pesos   = ['formacion' => 0.0];
+        $suma    = 0.0;
+        $lastKey = null;
+
+        foreach ($mapa as $area => $key) {
+            $hrs = (float) ($sumHoras[$area] ?? 0);
+            if ($hrs > 0) {
+                $pct         = round($hrs / $total * 100, 2);
+                $pesos[$key] = $pct;
+                $suma       += $pct;
+                $lastKey     = $key;
+            } else {
+                $pesos[$key] = 0.0;
+            }
+        }
+
+        if ($lastKey !== null) {
+            $pesos[$lastKey] = round(100 - ($suma - $pesos[$lastKey]), 2);
+        }
+
+        return $pesos;
+    }
+
+    /**
+     * @param  Collection<int, Evaluacion>  $evaluaciones
+     * @return array{S1: array<string, float>, S2: array<string, float>}|null
+     */
+    public static function horasRealesPromedioPorSemestre(Collection $evaluaciones): ?array
+    {
+        $valid = $evaluaciones->filter(fn (Evaluacion $e) => $e->tieneHorasRealesCompletas());
+        if ($valid->isEmpty()) {
+            return null;
+        }
+
+        $out = ['S1' => [], 'S2' => []];
+        foreach (Evaluacion::SEMESTRES as $sem) {
+            foreach (self::AREAS_HORAS_PRINCIPALES as $area) {
+                $col = Evaluacion::columnaHorasReal($area, $sem);
+                $out[$sem][$area] = round((float) $valid->avg($col), 2);
+            }
+        }
+
+        return $out;
+    }
+
+    /** @return array<string, float> */
+    public static function sumarHorasAnualesDesdeSemestres(array $horasPorSemestre): array
+    {
+        $sum = array_fill_keys(self::AREAS_HORAS_PRINCIPALES, 0.0);
+        foreach (Evaluacion::SEMESTRES as $sem) {
+            foreach (self::AREAS_HORAS_PRINCIPALES as $area) {
+                $sum[$area] += (float) ($horasPorSemestre[$sem][$area] ?? 0);
+            }
+        }
+
+        return $sum;
+    }
+
+    /**
      * nota_final = min(Σ(%T_i × N_i) / 100 + extra, 5.0)
      *
      * @param  array<string, float|int|string>  $notas  slug => nota 1.0–5.0
@@ -83,9 +171,14 @@ class CalificacionCadService
         }
 
         $extra = (float) ($evaluacion->extra_otras_actividades ?? 0.0);
-        $pesos = is_array($compromiso)
-            ? $compromiso
-            : self::pesosDesdeCompromiso($compromiso, $categoriaAcademica);
+
+        if (is_array($compromiso)) {
+            $pesos = $compromiso;
+        } elseif ($evaluacion instanceof Evaluacion) {
+            $pesos = $evaluacion->pesosParaCalificacion($categoriaAcademica);
+        } else {
+            $pesos = self::pesosDesdeCompromiso($compromiso, $categoriaAcademica);
+        }
 
         return self::calcularNotaFinal($notas, $pesos, $extra);
     }

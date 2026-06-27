@@ -63,8 +63,7 @@ class DashboardController extends Controller
                 ->where('periodo_id', $periodo->id)
                 ->where('facultad_id', $user->facultad_id)
                 ->where('user_id', '!=', $user->id)
-                ->evaluables()
-                ->whereIn('estado', ['carga_cerrada', 'en_evaluacion', 'evaluado'])
+                ->listosEvaluacionCca()
                 ->get();
 
             $stats = [
@@ -153,23 +152,29 @@ class DashboardController extends Controller
                 ->exists();
 
             if ($nomina) {
-                $cf = $nomina->calificacionFinal;
+                $cf = $nomina->calificacionVigenteParaAcademico();
                 $ap = $nomina->apelacion;
                 $stats = [
                     'evidencias_cargadas'  => $nomina->evidenciasNormales->count(),
                     'estado_nomina'        => $nomina->estado,
                     'apelaciones_abiertas' => $apelacionesAbiertas,
                     'calificacion'         => $cf ? [
-                        'puntaje_total' => $cf->puntaje_total,
-                        'calificacion'  => $cf->calificacion,
-                        'label'         => $cf->calificacionLabel(),
-                        'fecha'         => $cf->fecha->format('d/m/Y'),
+                        'nota_final'             => $cf->nota_final !== null
+                            ? (float) $cf->nota_final
+                            : round($cf->puntaje_total / 20, 2),
+                        'puntaje_total'          => $cf->puntaje_total,
+                        'calificacion'           => $cf->calificacion,
+                        'label'                  => $cf->calificacionLabel(),
+                        'fecha'                  => $cf->fecha->format('d/m/Y'),
+                        'es_apelacion'           => (bool) $cf->es_apelacion,
+                        'pendiente_reevaluacion' => $nomina->requiereReevaluacionApelacionCca(),
                     ] : null,
                     'apelacion'            => $ap ? [
                         'estado'    => $ap->estado,
                         'motivo'    => $ap->motivo,
                         'resolucion'=> $ap->resolucion,
                         'destino'   => $ap->destino,
+                        'reevaluacion_pendiente' => $nomina->requiereReevaluacionApelacionCca(),
                     ] : null,
                 ];
 

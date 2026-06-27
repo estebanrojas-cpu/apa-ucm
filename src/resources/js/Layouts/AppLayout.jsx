@@ -2,15 +2,21 @@ import { usePage, router, Link, Head } from '@inertiajs/react';
 import { useState, useRef, useEffect } from 'react';
 
 const roleLabels = {
-    analista_ccda:  'Analista CCDA',
-    secretario:     'Secretario',
-    miembro_cca:    'Miembro CCA',
-    jefe_academico: 'Jefe Académico',
-    vicerrectora:   'Vicerrectoría',
-    academico:      'Académico',
+    super_admin:           'Super Administrador',
+    analista_ccda:         'Analista CCDA',
+    secretario:            'Secretario',
+    miembro_cca:           'Miembro CCA',
+    jefe_academico:        'Jefe Académico',
+    director_departamento: 'Director de Depto.',
+    decano:                'Decano/a',
+    vicerrectora:          'Vicerrectoría',
+    academico:             'Académico',
 };
 
 const navByRole = {
+    super_admin: [
+        { label: 'Usuarios', href: '/super-admin/usuarios', icon: 'folder' },
+    ],
     analista_ccda: [
         { label: 'Dashboard',      href: '/analista/dashboard',      icon: 'grid' },
         { label: 'Períodos',       href: '/analista/periodos',       icon: 'calendar' },
@@ -29,6 +35,13 @@ const navByRole = {
     jefe_academico: [
         { label: 'Dashboard',  href: '/jefe/dashboard',  icon: 'grid' },
         { label: 'Académicos', href: '/jefe/academicos', icon: 'folder' },
+    ],
+    director_departamento: [
+        { label: 'Dashboard',  href: '/jefe/dashboard',  icon: 'grid' },
+        { label: 'Académicos', href: '/jefe/academicos', icon: 'folder' },
+    ],
+    decano: [
+        { label: 'Directivos', href: '/decano/directivos', icon: 'folder' },
     ],
     vicerrectora: [
         { label: 'Dashboard',   href: '/vicerrectora/dashboard',   icon: 'grid' },
@@ -156,6 +169,7 @@ export default function AppLayout({ title, children }) {
     const user = auth.user;
     const activeRole = auth.active_role ?? user.role;
     const userRoles  = auth.user_roles ?? [activeRole];
+    const cargoBadges = auth.cargo_badges ?? [];
     const currentUrl = page.url;
 
     const navItems = navByRole[activeRole] ?? [];
@@ -197,6 +211,11 @@ export default function AppLayout({ title, children }) {
                             </p>
                             <p className="text-blue-200 text-xs opacity-70">
                                 {roleLabels[activeRole] ?? activeRole}
+                                {cargoBadges.length > 0 && (
+                                    <span className="ml-1 opacity-80">
+                                        · {cargoBadges.map(b => b.label).join(', ')}
+                                    </span>
+                                )}
                             </p>
                         </div>
                         <div className="w-8 h-8 rounded-full bg-[#0096D6] flex items-center justify-center text-white text-sm font-bold shrink-0">

@@ -3,7 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\CalificacionFinal;
-use App\Models\CompromisoApa;
 use App\Models\ComisionIntegrante;
 use App\Models\Cronograma;
 use App\Models\Evaluacion;
@@ -25,10 +24,10 @@ use Illuminate\Database\Seeder;
  *
  * Qué hace:
  *  - evaluacion_cca          → fecha_fin = ayer  (cerrada)
- *  - comunicacion_resultados → inicio = ayer, fin = D+7   (abierta)
- *  - apelaciones             → inicio = ayer, fin = D+14  (abierta)
- *  - registro_ccda           → inicio = ayer, fin = D+20  (abierta)
- *  - revision_vicerrectoria  → inicio = ayer, fin = D+25  (abierta)
+ *  - comunicacion_resultados → fin = ayer       (cerrada)
+ *  - apelaciones             → inicio = hoy, fin = D+14  (abierta)
+ *  - registro_ccda           → inicio = D+15, fin = D+25
+ *  - revision_vicerrectoria  → inicio = D+26, fin = D+35
  *
  * Nominas aún en carga_cerrada / en_evaluacion (CCA no las terminó):
  *  - Si tienen evaluaciones parciales → genera CalificacionFinal desde ellas.
@@ -57,10 +56,11 @@ class FlujoEtapa3CierreSeeder extends Seeder
 
         $ventanas = [
             'evaluacion_cca'          => [null,  $ayer],
-            'comunicacion_resultados' => [$ayer, $hoy->copy()->addDays(7)],
-            'apelaciones'             => [$ayer, $hoy->copy()->addDays(14)],
-            'registro_ccda'           => [$ayer, $hoy->copy()->addDays(20)],
-            'revision_vicerrectoria'  => [$ayer, $hoy->copy()->addDays(25)],
+            // Comunicación cerrada ayer; apelaciones abiertas desde hoy (secuencial, sin solapamiento).
+            'comunicacion_resultados' => [$ayer->copy()->subDays(7), $ayer],
+            'apelaciones'             => [$hoy, $hoy->copy()->addDays(14)],
+            'registro_ccda'           => [$hoy->copy()->addDays(15), $hoy->copy()->addDays(25)],
+            'revision_vicerrectoria'  => [$hoy->copy()->addDays(26), $hoy->copy()->addDays(35)],
         ];
 
         foreach ($ventanas as $etapa => [$inicio, $fin]) {
@@ -81,11 +81,13 @@ class FlujoEtapa3CierreSeeder extends Seeder
         $cca = ComisionIntegrante::whereHas('comision', fn ($q) => $q
             ->where('periodo_id', $periodo->id)
             ->where('estado', 'confirmada'))
-            ->with('user')
+            ->whereHas('nomina', fn ($q) => $q->whereNotNull('user_id'))
+            ->with('nomina.academico')
             ->first()
-            ?->user;
+            ?->nomina
+            ?->academico;
 
-        $sinFinalizar = Nomina::with(['evaluaciones', 'compromisoApa', 'calificacionFinal'])
+        $sinFinalizar = Nomina::with(['evaluaciones.nomina', 'compromisos', 'calificacionFinal'])
             ->where('periodo_id', $periodo->id)
             ->whereIn('estado', ['carga_cerrada', 'en_evaluacion'])
             ->whereDoesntHave('calificacionFinal', fn ($q) => $q->where('es_apelacion', false))
@@ -129,14 +131,11 @@ class FlujoEtapa3CierreSeeder extends Seeder
                 continue;
             }
 
-            // Calcular nota final desde las evaluaciones existentes
-            $categoria  = $nomina->categoriaEfectiva();
-            $compromiso = $nomina->compromisoApa;
+            // Calcular nota final desde las evaluaciones existentes (con horas reales CCA si existen)
+            $categoria = $nomina->categoriaEfectiva();
 
             $notaFinal = round(
-                $evaluaciones->map(
-                    fn ($e) => CalificacionCadService::calcularDesdeEvaluacion($e, $categoria, $compromiso)
-                )->avg(),
+                $evaluaciones->map(fn ($e) => $e->notaFinalCad($categoria))->avg(),
                 2
             );
 

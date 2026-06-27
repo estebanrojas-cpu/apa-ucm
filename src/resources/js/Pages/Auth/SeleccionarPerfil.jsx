@@ -1,21 +1,27 @@
 import { usePage, router } from '@inertiajs/react';
 
 const roleLabels = {
-    analista_ccda:  'Analista CCDA',
-    secretario:     'Secretario de Facultad',
-    miembro_cca:    'Miembro CCA',
-    jefe_academico: 'Jefe Académico',
-    vicerrectora:   'Vicerrectoría',
-    academico:      'Académico',
+    super_admin:           'Super Administrador',
+    analista_ccda:         'Analista CCDA',
+    secretario:            'Secretario de Facultad',
+    miembro_cca:           'Miembro CCA',
+    jefe_academico:        'Jefe Académico',
+    director_departamento: 'Director de Departamento',
+    decano:                'Decano/a',
+    vicerrectora:          'Vicerrectoría',
+    academico:             'Académico',
 };
 
 const roleDescriptions = {
-    analista_ccda:  'Gestión de períodos, nóminas, comisiones CCA y verificación institucional.',
-    secretario:     'Administración de expedientes y plazos de su facultad.',
-    miembro_cca:    'Revisión y calificación de expedientes asignados.',
-    jefe_academico: 'Emisión de informes de jefatura por académico.',
-    vicerrectora:   'Consulta global de calificaciones y comentarios.',
-    academico:      'Carga de evidencias y seguimiento de su proceso APA.',
+    super_admin:           'Gestión de usuarios institucionales y configuración global.',
+    analista_ccda:         'Gestión de períodos, nóminas, cargos de facultad y verificación institucional.',
+    secretario:            'Administración de expedientes y plazos de su facultad.',
+    miembro_cca:           'Revisión y calificación de expedientes asignados.',
+    jefe_academico:        'Emisión de informes de jefatura por académico.',
+    director_departamento: 'Informes de jefatura sobre académicos de su departamento.',
+    decano:                'Informes de jefatura sobre directivos de la facultad.',
+    vicerrectora:          'Consulta global de calificaciones y comentarios.',
+    academico:             'Carga de evidencias y seguimiento de su proceso APA.',
 };
 
 const roleIcons = {

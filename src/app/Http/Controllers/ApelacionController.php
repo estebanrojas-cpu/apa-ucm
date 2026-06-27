@@ -120,22 +120,10 @@ class ApelacionController extends Controller
             return back()->with('error', 'Solo se puede cerrar una apelación en revisión.');
         }
 
-        // Calificación original (no-apelación) determina el nivel de revisión
-        $calificacionOriginal = $apelacion->nomina->calificacionFinal()
-            ->where('es_apelacion', false)
-            ->first();
-
-        $destino = in_array($calificacionOriginal?->calificacion, ['regular', 'deficiente'])
-            ? 'ccda'
-            : 'cca';
-
-        $apelacion->update(['estado' => 'resuelta', 'destino' => $destino]);
+        // Toda apelación aprobada y cerrada vuelve a re-evaluación por la CCA de la facultad.
+        $apelacion->update(['estado' => 'resuelta', 'destino' => 'cca']);
         $apelacion->nomina->update(['estado' => 'en_evaluacion']);
 
-        $msg = $destino === 'ccda'
-            ? 'Apelación cerrada. La calificación es Regular/Deficiente, por lo que será revisada por la CCDA (2do nivel).'
-            : 'Apelación cerrada. El expediente está disponible para re-evaluación por la CCA.';
-
-        return back()->with('success', $msg);
+        return back()->with('success', 'Apelación cerrada. El expediente está disponible para re-evaluación por la CCA.');
     }
 }

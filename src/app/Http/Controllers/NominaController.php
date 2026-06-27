@@ -12,6 +12,8 @@ use App\Models\Periodo;
 use App\Models\User;
 use Carbon\Carbon;
 use App\Mail\CredencialesAcademicoMail;
+use App\Mail\InicioProcesoMail;
+use App\Models\Cronograma;
 use App\Services\NominaAccesoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -416,12 +418,25 @@ class NominaController extends Controller
 
     public function enviarCredenciales(Periodo $periodo): RedirectResponse
     {
+        $periodo->load('cronogramas');
         $nominas = Nomina::where('periodo_id', $periodo->id)->with('academico')->get();
 
         $enviados    = 0;
         $creados     = 0;
+        $notificados = 0;
         $errores     = 0;
         $ultimoError = null;
+
+        $orden      = array_flip(Cronograma::ETAPAS);
+        $cronograma = $periodo->cronogramas
+            ->sortBy(fn ($c) => $orden[$c->etapa] ?? 99)
+            ->map(fn ($c) => [
+                'etapa'        => Cronograma::etiqueta($c->etapa),
+                'fecha_inicio' => $c->fecha_inicio->format('d/m/Y'),
+                'fecha_fin'    => $c->fecha_fin->format('d/m/Y'),
+            ])
+            ->values()
+            ->all();
 
         foreach ($nominas as $nomina) {
             if (!$nomina->rut || !$nomina->nombre) {
@@ -432,24 +447,29 @@ class NominaController extends Controller
             try {
                 $eraNuevo = !$nomina->user_id;
                 $user     = $this->acceso->provisionarUsuario($nomina);
-                $password = $this->acceso->passwordDesdeRut($user->rut ?? '');
 
-                if (!$password) {
-                    $errores++;
-                    continue;
+                if ($eraNuevo) {
+                    $password = $this->acceso->passwordDesdeRut($user->rut ?? '');
+                    if (!$password) {
+                        $errores++;
+                        continue;
+                    }
+
+                    $user->password = $password;
+                    $user->save();
+
+                    Mail::to($user->email)->send(
+                        new CredencialesAcademicoMail($user->name, $user->email, $password)
+                    );
+                    $creados++;
+                } else {
+                    Mail::to($user->email)->send(
+                        new InicioProcesoMail($periodo, $cronograma, config('app.url'))
+                    );
+                    $notificados++;
                 }
-
-                $user->password = $password;
-                $user->save();
-
-                Mail::to($user->email)->send(
-                    new CredencialesAcademicoMail($user->name, $user->email, $password)
-                );
 
                 $enviados++;
-                if ($eraNuevo) {
-                    $creados++;
-                }
             } catch (\Throwable $e) {
                 $errores++;
                 $ultimoError ??= $e->getMessage();
@@ -462,9 +482,10 @@ class NominaController extends Controller
 
         $msg = "Acceso comunicado a {$enviados} persona(s) de la nómina.";
         if ($creados > 0) {
-            $msg .= " Se crearon {$creados} cuenta(s) con sus perfiles; las credenciales fueron enviadas por correo.";
-        } else {
-            $msg .= " Las credenciales fueron reenviadas por correo.";
+            $msg .= " Se crearon {$creados} cuenta(s) nuevas con credenciales por correo.";
+        }
+        if ($notificados > 0) {
+            $msg .= " {$notificados} usuario(s) existente(s) fueron notificados del inicio del período.";
         }
         if ($errores) {
             $msg .= " {$errores} no pudieron ser notificados.";
