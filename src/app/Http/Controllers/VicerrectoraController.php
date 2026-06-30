@@ -22,11 +22,14 @@ class VicerrectoraController extends Controller
         if ($periodo) {
             $academicos = Nomina::with([
                 'academico.facultad',
+                'facultad',
                 'calificacionFinal',
                 'evaluaciones.comentariosVicerrectora',
             ])
                 ->where('periodo_id', $periodo->id)
+                ->evaluables()
                 ->whereIn('estado', ['evaluado', 'cerrado', 'apelado'])
+                ->whereHas('calificacionFinal')
                 ->orderBy('created_at')
                 ->get()
                 ->map(function (Nomina $n) {
@@ -37,11 +40,11 @@ class VicerrectoraController extends Controller
                     return [
                         'nomina_id'       => $n->id,
                         'evaluacion_id'   => $eval?->id,
-                        'name'            => $n->academico->name,
-                        'rut'             => $n->academico->rut,
-                        'facultad'        => $n->academico->facultad?->nombre,
+                        'name'            => $n->nombre ?? $n->academico?->name ?? '',
+                        'rut'             => $n->rut ?? $n->academico?->rut ?? '',
+                        'facultad'        => $n->facultad?->nombre ?? $n->academico?->facultad?->nombre,
                         'categoria'       => CalificacionCadService::labelCategoria(
-                            $n->categoria ?? $n->academico->categoria_academica
+                            $n->categoriaEfectiva()
                         ),
                         'nota_final'      => $cf ? (float) ($cf->nota_final ?? 0) : null,
                         'calificacion'    => $cf?->calificacion,
@@ -65,6 +68,7 @@ class VicerrectoraController extends Controller
     {
         $nomina->load([
             'academico.facultad',
+            'facultad',
             'evidenciasNormales.categoria',
             'evaluaciones.evaluador',
             'calificacionFinal',
@@ -80,10 +84,10 @@ class VicerrectoraController extends Controller
                 'id'     => $nomina->id,
                 'estado' => $nomina->estado,
                 'academico' => [
-                    'name'     => $nomina->academico->name,
-                    'rut'      => $nomina->academico->rut,
-                    'email'    => $nomina->academico->email,
-                    'facultad' => $nomina->academico->facultad?->nombre,
+                    'name'     => $nomina->nombre ?? $nomina->academico?->name ?? '',
+                    'rut'      => $nomina->rut ?? $nomina->academico?->rut ?? '',
+                    'email'    => $nomina->academico?->email,
+                    'facultad' => $nomina->facultad?->nombre ?? $nomina->academico?->facultad?->nombre,
                     'categoria'=> CalificacionCadService::labelCategoria($categoria),
                 ],
                 'calificacion' => $cf ? [

@@ -164,7 +164,7 @@ function conceptoDesdeNota(nota) {
 export default function EvaluarExpediente({
     nomina, categorias, pesosReglamento, conteoEvidencias, conteoEvidenciasApelacion = {},
     miEvaluacion, todasEvaluaciones, calificacionFinal, calificacionOriginal,
-    esApelacion, apelacion, sinCompromisoApa, compromisosSemestres,
+    esApelacion, apelacion, sinCompromisoApa, compromisosSemestres, informeJefatura,
 }) {
     const { flash } = usePage().props;
     const badge = ESTADOS[nomina.estado] ?? { label: nomina.estado, cls: 'bg-gray-100 text-gray-600' };
@@ -217,6 +217,18 @@ export default function EvaluarExpediente({
                 [key]: value,
             },
         });
+    }
+
+    function copiarDeclaradas() {
+        const nuevasHoras = {};
+        for (const sem of ['S1', 'S2']) {
+            nuevasHoras[sem] = {};
+            for (const { key } of AREAS_HORAS) {
+                const val = compromisosPorSemestre[sem]?.[key];
+                nuevasHoras[sem][key] = val != null ? String(parseFloat(val) || 0) : '0';
+            }
+        }
+        evalForm.setData('horas_reales', nuevasHoras);
     }
 
     function submitEval(e) {
@@ -346,17 +358,62 @@ export default function EvaluarExpediente({
                     </div>
                 )}
 
+                {informeJefatura && (
+                    <div className="mb-6 bg-indigo-50 border border-indigo-200 rounded-xl p-5">
+                        <h2 className="text-xs font-semibold text-indigo-700 uppercase tracking-wide mb-3">
+                            Informe de Jefatura
+                        </h2>
+                        <div className="flex items-center justify-between mb-3">
+                            <div>
+                                <p className="text-sm text-indigo-900 font-medium">
+                                    {informeJefatura.jefe} —{' '}
+                                    <span className="font-bold">{informeJefatura.puntaje}/100</span>
+                                    {' '}
+                                    <span className="text-xs text-indigo-600">({informeJefatura.calificacion_label})</span>
+                                </p>
+                            </div>
+                        </div>
+                        {informeJefatura.observacion_general && (
+                            <div className="mb-2">
+                                <p className="text-xs font-medium text-indigo-700 mb-0.5">Observación general</p>
+                                <p className="text-sm text-indigo-900 whitespace-pre-wrap">{informeJefatura.observacion_general}</p>
+                            </div>
+                        )}
+                        {categorias.map(cat => {
+                            const obs = informeJefatura.observaciones?.[cat.slug];
+                            if (!obs) return null;
+                            return (
+                                <div key={cat.slug} className="mt-2">
+                                    <p className="text-xs font-medium text-indigo-700 mb-0.5">{AREA_LABELS[cat.slug] ?? cat.nombre}</p>
+                                    <p className="text-sm text-indigo-900 whitespace-pre-wrap">{obs}</p>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
                 <form onSubmit={submitEval} className="space-y-6">
                 {compromisosSemestres?.length > 0 && (
                     <div className="bg-white rounded-xl border border-[#1B2D6B]/20 p-5">
-                        <div className="mb-4">
-                            <h2 className="text-sm font-semibold text-[#1B2D6B] uppercase tracking-wide">
-                                Comparación horas APA — declaradas vs reales
-                            </h2>
-                            <p className="text-xs text-gray-500 mt-1">
-                                Revise la evidencia y registre las horas que el académico ocupó efectivamente,
-                                comparadas con lo declarado en su APA de cada semestre.
-                            </p>
+                        <div className="mb-4 flex items-start justify-between gap-4">
+                            <div>
+                                <h2 className="text-sm font-semibold text-[#1B2D6B] uppercase tracking-wide">
+                                    Comparación horas APA — declaradas vs reales
+                                </h2>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Revise la evidencia y registre las horas que el académico ocupó efectivamente,
+                                    comparadas con lo declarado en su APA de cada semestre.
+                                </p>
+                            </div>
+                            {!bloqueado && !evalForm.data.sin_calificacion && (
+                                <button
+                                    type="button"
+                                    onClick={copiarDeclaradas}
+                                    className="shrink-0 text-xs px-3 py-1.5 rounded-lg border border-[#1B2D6B]/30 text-[#1B2D6B] hover:bg-[#1B2D6B]/5 transition-colors"
+                                >
+                                    Usar declaradas como reales
+                                </button>
+                            )}
                         </div>
                         <div className="overflow-x-auto">
                             <table className="w-full text-xs border-collapse">

@@ -6,6 +6,7 @@ use App\Models\Apelacion;
 use App\Models\Nomina;
 use App\Models\Notificacion;
 use App\Models\Periodo;
+use App\Services\CalificacionCadService;
 use Illuminate\Http\Request;
 
 class ApelacionController extends Controller
@@ -120,10 +121,20 @@ class ApelacionController extends Controller
             return back()->with('error', 'Solo se puede cerrar una apelación en revisión.');
         }
 
-        // Toda apelación aprobada y cerrada vuelve a re-evaluación por la CCA de la facultad.
-        $apelacion->update(['estado' => 'resuelta', 'destino' => 'cca']);
-        $apelacion->nomina->update(['estado' => 'en_evaluacion']);
+        $nomina  = $apelacion->nomina;
+        $destino = $nomina->destinoApelacionTrasCierre();
 
-        return back()->with('success', 'Apelación cerrada. El expediente está disponible para re-evaluación por la CCA.');
+        $apelacion->update([
+            'estado'  => 'resuelta',
+            'destino' => $destino,
+        ]);
+        $nomina->update(['estado' => 'en_evaluacion']);
+
+        $destinoLabel = CalificacionCadService::labelDestinoApelacion($destino);
+
+        return back()->with(
+            'success',
+            "Apelación enviada a {$destinoLabel} para re-evaluación."
+        );
     }
 }

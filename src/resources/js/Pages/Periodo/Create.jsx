@@ -18,10 +18,12 @@ const ETAPAS_PARALELAS = new Set([
     'informe_jefatura',
 ]);
 
+/** Comparte ventana con evaluacion_cca (misma fecha de cierre). */
+const ETAPAS_ESPEJO_EVALUACION = new Set(['comunicacion_resultados']);
+
 const INICIO_SECUENCIAL = {
     evaluacion_cca:          'validacion_secretario',
-    comunicacion_resultados: 'evaluacion_cca',
-    apelaciones:             'comunicacion_resultados',
+    apelaciones:             'evaluacion_cca',
     registro_ccda:           'apelaciones',
     revision_vicerrectoria:  'registro_ccda',
 };
@@ -45,14 +47,25 @@ export default function PeriodoCreate() {
             return data.fecha_inicio || undefined;
         }
 
+        if (ETAPAS_ESPEJO_EVALUACION.has(etapa)) {
+            return minFinEtapa('evaluacion_cca');
+        }
+
         const etapaPrevia = INICIO_SECUENCIAL[etapa];
         return finEtapa(etapaPrevia) || data.fecha_inicio || undefined;
     }
 
     function setCronograma(index, value) {
-        const updated = data.cronograma.map((item, i) =>
-            i === index ? { ...item, fecha_fin: value } : item
-        );
+        const etapa = ETAPAS[index]?.value;
+        const updated = data.cronograma.map((item, i) => {
+            if (i === index) {
+                return { ...item, fecha_fin: value };
+            }
+            if (etapa === 'evaluacion_cca' && item.etapa === 'comunicacion_resultados') {
+                return { ...item, fecha_fin: value };
+            }
+            return item;
+        });
         setData('cronograma', updated);
     }
 
@@ -166,9 +179,9 @@ export default function PeriodoCreate() {
                             Cronograma de etapas
                         </h2>
                         <p className="text-xs text-gray-400 mb-5">
-                            Las etapas paralelas (Carga de Evidencias, Validación Secretario e Informe Jefatura) inician al comienzo del período.
-                            Las demás etapas se habilitan secuencialmente al cerrar la etapa anterior.
-                            Defina la fecha de cierre de cada etapa.
+                            Bloque A en paralelo: Carga de Evidencias, Validación Secretario e Informe Jefatura (inician con el período).
+                            Evaluación CCA y Comunicación de Resultados comparten la misma ventana.
+                            Las demás etapas se habilitan secuencialmente al cerrar la anterior.
                         </p>
 
                         {errors.cronograma && (
@@ -178,7 +191,12 @@ export default function PeriodoCreate() {
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                             {ETAPAS.map((etapa, i) => (
                                 <div key={etapa.value} className="rounded-lg border border-gray-100 bg-gray-50/80 p-4">
-                                    <p className="text-sm font-medium text-gray-700 mb-2">{etapa.label}</p>
+                                    <p className="text-sm font-medium text-gray-700 mb-2">
+                                        {etapa.label}
+                                        {ETAPAS_ESPEJO_EVALUACION.has(etapa.value) && (
+                                            <span className="ml-1 text-xs font-normal text-gray-400">(igual que Evaluación CCA)</span>
+                                        )}
+                                    </p>
                                     <div>
                                         <label className="block text-xs text-gray-500 mb-1">Fin</label>
                                         <input
@@ -186,6 +204,7 @@ export default function PeriodoCreate() {
                                             value={data.cronograma[i].fecha_fin}
                                             min={minFinEtapa(etapa.value)}
                                             max={data.fecha_cierre || undefined}
+                                            disabled={ETAPAS_ESPEJO_EVALUACION.has(etapa.value)}
                                             onChange={e => setCronograma(i, e.target.value)}
                                             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1B2D6B]/30 focus:border-[#1B2D6B]"
                                         />

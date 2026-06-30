@@ -1,10 +1,11 @@
 <?php
 
 /**
- * Cast FCI 2026 — 12 académicos con casos de prueba documentados.
+ * Cast FCI 2026 — 6 académicos con casos de prueba representativos.
  * Usado por PeriodoBaseSeeder (solo nómina; sin usuarios precargados).
  * Horas de contrato: 40 (jornada completa) · 24 (media jornada / hora).
- * El campo `roles` documenta el perfil esperado tras «Enviar acceso».
+ * El campo `roles` es siempre ['academico']: los roles de cargo (decano, secretario, etc.)
+ * los asigna CargoPeriodoService al cargar o enviar cargos desde el analista CCDA.
  */
 return [
     [
@@ -12,7 +13,7 @@ return [
         'rut'             => '20.111.222-3',
         'name'            => 'María Elena Rodríguez Mora',
         'email'           => 'maria.rodriguez@ucm.cl',
-        'roles'           => ['jefe_academico'],
+        'roles'           => ['academico'],
         'nomina'          => [
             'adscripcion_academica'  => 'Planta',
             'unidad_superior'        => 'Facultad de Ciencias de la Ingeniería',
@@ -34,7 +35,7 @@ return [
         'rut'             => '20.222.333-4',
         'name'            => 'Carlos Eduardo Fuentes Pinto',
         'email'           => 'carlos.fuentes@ucm.cl',
-        'roles'           => ['secretario', 'academico'],
+        'roles'           => ['academico'],
         'nomina'          => [
             'adscripcion_academica'  => 'Planta',
             'unidad_superior'        => 'Facultad de Ciencias de la Ingeniería',
@@ -47,48 +48,6 @@ return [
             'fecha_categorizacion'   => '2019-03-15',
             'historial'              => [
                 2026 => ['categoria' => 'adjunto', 'fecha_categorizacion' => '2019-03-15'],
-            ],
-        ],
-    ],
-    [
-        'numero_personal' => '003',
-        'rut'             => '20.333.444-5',
-        'name'            => 'Pedro Andrés Alarcón Rojas',
-        'email'           => 'pedro.alarcon@ucm.cl',
-        'roles'           => ['academico'],
-        'nomina'          => [
-            'adscripcion_academica'  => 'Planta',
-            'unidad_superior'        => 'Facultad de Ciencias de la Ingeniería',
-            'unidad'                 => 'Depto. Computación e Informática',
-            'nombre_posicion'        => 'Profesor',
-            'tipo_trabajador'        => 'Académico Media Jornada',
-            'fecha_inicio_contrato'  => '2014-03-01',
-            'horas_contrato'         => 24,
-            'categoria'              => 'adjunto',
-            'fecha_categorizacion'   => '2018-03-01',
-            'historial'              => [
-                2026 => ['categoria' => 'adjunto', 'fecha_categorizacion' => '2018-03-01'],
-            ],
-        ],
-    ],
-    [
-        'numero_personal' => '004',
-        'rut'             => '20.444.555-6',
-        'name'            => 'Sandra Beatriz Muñoz Lagos',
-        'email'           => 'sandra.munoz@ucm.cl',
-        'roles'           => ['academico'],
-        'nomina'          => [
-            'adscripcion_academica'  => 'Planta',
-            'unidad_superior'        => 'Facultad de Ciencias de la Ingeniería',
-            'unidad'                 => 'Depto. Matemáticas',
-            'nombre_posicion'        => 'Profesora',
-            'tipo_trabajador'        => 'Académico Media Jornada',
-            'fecha_inicio_contrato'  => '2016-03-01',
-            'horas_contrato'         => 24,
-            'categoria'              => 'adjunto',
-            'fecha_categorizacion'   => '2020-03-01',
-            'historial'              => [
-                2026 => ['categoria' => 'adjunto', 'fecha_categorizacion' => '2020-03-01'],
             ],
         ],
     ],
@@ -110,73 +69,6 @@ return [
             'fecha_categorizacion'   => '2020-08-01',
             'historial'              => [
                 2026 => ['categoria' => 'auxiliar', 'fecha_categorizacion' => '2020-08-01'],
-                2025 => ['nota' => 4.6, 'concepto' => 'Excelente'],
-            ],
-        ],
-    ],
-    [
-        'numero_personal' => '006',
-        'rut'             => '20.666.777-8',
-        'name'            => 'Ana Patricia Martínez Pérez',
-        'email'           => 'ana.martinez@ucm.cl',
-        'roles'           => ['academico'],
-        'nomina'          => [
-            'adscripcion_academica'  => 'Planta',
-            'unidad_superior'        => 'Facultad de Ciencias de la Ingeniería',
-            'unidad'                 => 'Depto. Matemáticas',
-            'nombre_posicion'        => 'Profesora',
-            'tipo_trabajador'        => 'Académico Media Jornada',
-            'fecha_inicio_contrato'  => '2012-03-01',
-            'horas_contrato'         => 24,
-            'categoria'              => 'adjunto',
-            'fecha_categorizacion'   => '2016-03-01',
-            'historial'              => [
-                2024 => ['categoria' => 'adjunto', 'fecha_categorizacion' => '2016-03-01', 'nota' => 4.0, 'concepto' => 'Bueno'],
-                2026 => ['categoria' => 'adjunto', 'fecha_categorizacion' => '2016-03-01'],
-            ],
-        ],
-    ],
-    [
-        'numero_personal' => '007',
-        'rut'             => '20.777.888-9',
-        'name'            => 'Luis Hernán Contreras Bravo',
-        'email'           => 'luis.contreras@ucm.cl',
-        'roles'           => ['academico'],
-        'nomina'          => [
-            'adscripcion_academica'  => 'Contrata',
-            'unidad_superior'        => 'Facultad de Ciencias de la Ingeniería',
-            'unidad'                 => 'Depto. Computación e Informática',
-            'nombre_posicion'        => 'Profesor Instructor',
-            'tipo_trabajador'        => 'Académico Hora',
-            'fecha_inicio_contrato'  => '2025-03-01',
-            'horas_contrato'         => 24,
-            'categoria'              => 'instructor',
-            'fecha_categorizacion'   => '2025-03-01',
-            'historial'              => [
-                2026 => ['categoria' => 'instructor', 'fecha_categorizacion' => '2025-03-01'],
-            ],
-        ],
-    ],
-    [
-        'numero_personal' => '008',
-        'rut'             => '20.888.999-0',
-        'name'            => 'Valentina Paz Torres Ríos',
-        'email'           => 'valentina.torres@ucm.cl',
-        'roles'           => ['academico'],
-        'nomina'          => [
-            'adscripcion_academica'  => 'Planta',
-            'unidad_superior'        => 'Facultad de Ciencias de la Ingeniería',
-            'unidad'                 => 'Depto. Matemáticas',
-            'nombre_posicion'        => 'Profesora Auxiliar',
-            'tipo_trabajador'        => 'Académico Hora',
-            'fecha_inicio_contrato'  => '2021-08-01',
-            'horas_contrato'         => 24,
-            'categoria'              => 'auxiliar',
-            'fecha_categorizacion'   => '2021-08-01',
-            'historial'              => [
-                2024 => ['categoria' => 'auxiliar', 'fecha_categorizacion' => '2021-08-01', 'nota' => 3.8, 'concepto' => 'Bueno'],
-                2025 => ['nota' => 4.0, 'concepto' => 'Bueno'],
-                2026 => ['categoria' => 'auxiliar', 'fecha_categorizacion' => '2021-08-01'],
             ],
         ],
     ],
@@ -195,11 +87,10 @@ return [
             'fecha_inicio_contrato'  => '2018-03-01',
             'horas_contrato'         => 24,
             'categoria'              => 'adjunto',
-            'fecha_categorizacion'   => '2025-08-01',
+            'fecha_categorizacion'   => '2020-03-01',
             'historial'              => [
-                2024 => ['categoria' => 'auxiliar', 'fecha_categorizacion' => '2018-03-01', 'nota' => 3.6, 'concepto' => 'Bueno'],
-                2025 => ['nota' => 3.9, 'concepto' => 'Bueno'],
-                2026 => ['categoria' => 'adjunto', 'fecha_categorizacion' => '2025-08-01'],
+                2024 => ['categoria' => 'adjunto', 'fecha_categorizacion' => '2020-03-01', 'nota' => 3.6, 'concepto' => 'Bueno'],
+                2026 => ['categoria' => 'adjunto', 'fecha_categorizacion' => '2020-03-01'],
             ],
         ],
     ],
@@ -243,30 +134,7 @@ return [
             'fecha_categorizacion'   => '2019-08-01',
             'historial'              => [
                 2024 => ['categoria' => 'adjunto', 'fecha_categorizacion' => '2019-08-01', 'nota' => 3.2, 'concepto' => 'Regular'],
-                2025 => ['nota' => 3.5, 'concepto' => 'Bueno'],
                 2026 => ['categoria' => 'adjunto', 'fecha_categorizacion' => '2019-08-01'],
-            ],
-        ],
-    ],
-    [
-        'numero_personal' => '012',
-        'rut'             => '21.222.333-4',
-        'name'            => 'Francisca Isabel Núñez Bravo',
-        'email'           => 'francisca.nunez@ucm.cl',
-        'roles'           => ['academico'],
-        'nomina'          => [
-            'adscripcion_academica'  => 'Planta',
-            'unidad_superior'        => 'Facultad de Ciencias de la Ingeniería',
-            'unidad'                 => 'Depto. Matemáticas',
-            'nombre_posicion'        => 'Profesora Auxiliar',
-            'tipo_trabajador'        => 'Académico Media Jornada',
-            'fecha_inicio_contrato'  => '2022-03-01',
-            'horas_contrato'         => 24,
-            'categoria'              => 'auxiliar',
-            'fecha_categorizacion'   => '2022-03-01',
-            'historial'              => [
-                2026 => ['categoria' => 'auxiliar', 'fecha_categorizacion' => '2022-03-01'],
-                2025 => ['nota' => 3.7, 'concepto' => 'Bueno'],
             ],
         ],
     ],

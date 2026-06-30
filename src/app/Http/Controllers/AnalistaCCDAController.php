@@ -80,9 +80,7 @@ class AnalistaCCDAController extends Controller
                     )->count();
 
                     $ccdaPendientes = $nominasVerificacion->filter(
-                        fn ($n) => $n->estado === 'en_evaluacion'
-                            && $n->apelacion?->estado === 'resuelta'
-                            && ($n->apelacion->destino ?? 'cca') === 'ccda'
+                        fn (Nomina $n) => $n->requiereEvaluacionApelacionCcda()
                     )->count();
 
                     $actaCierre = Acta::where('periodo_id', $periodo->id)
@@ -179,16 +177,24 @@ class AnalistaCCDAController extends Controller
             fn ($f) => $f['verificacion'] && $f['verificacion']['verificado_en'] !== null
         )->count();
 
+        $todasVerificadas = $totalFacultades > 0 && $facultadesVerificadas === $totalFacultades;
+
         return Inertia::render('AnalistaCCDA/RegistroCcda', [
-            'periodo'              => $periodo?->only(['id', 'anio', 'nombre']),
+            'periodo'              => $periodo ? [
+                'id'          => $periodo->id,
+                'anio'        => $periodo->anio,
+                'nombre'      => $periodo->nombre,
+                'cerrado_en'  => $periodo->cerrado_en?->format('d/m/Y H:i'),
+            ] : null,
             'etapa'                => $etapa ? [
                 'fecha_inicio' => $etapa->fecha_inicio->format('d/m/Y'),
                 'fecha_fin'    => $etapa->fecha_fin->format('d/m/Y'),
                 'esta_vigente' => $etapa->estaVigente(),
             ] : null,
-            'facultades'           => $facultades,
-            'total_facultades'     => $totalFacultades,
+            'facultades'             => $facultades,
+            'total_facultades'       => $totalFacultades,
             'facultades_verificadas' => $facultadesVerificadas,
+            'puede_cerrar'           => $todasVerificadas && $periodo && !$periodo->cerrado_en,
         ]);
     }
 
@@ -719,5 +725,223 @@ class AnalistaCCDAController extends Controller
         })->filter()->values();
 
         return view('analista.incumplimientos', compact('periodo', 'facultades'));
+    }
+
+    // ─── Cierre de período ────────────────────────────────────────────────────
+
+    public function cerrarPeriodo(Periodo $periodo)
+    {
+        if ($periodo->cerrado_en) {
+            return back()->with('error', 'El período ya está cerrado.');
+        }
+
+        $totalFacultades = Facultad::whereHas(
+            'nominas', fn ($q) => $q->where('periodo_id', $periodo->id)
+        )->count();
+
+        $verificadas = VerificacionCcda::where('periodo_id', $periodo->id)
+            ->whereNotNull('verificado_en')
+            ->count();
+
+        if ($totalFacultades === 0 || $verificadas < $totalFacultades) {
+            return back()->with('error', 'Todas las facultades deben estar verificadas antes de cerrar el período.');
+        }
+
+        $periodo->update([
+            'cerrado_en' => now(),
+            'cerrado_por' => auth()->id(),
+            'estado'     => 'cerrado',
+        ]);
+
+        return back()->with('success', "Período {$periodo->nombre} cerrado correctamente. Ya no puede recibir modificaciones.");
+    }
+
+    // ─── Historial de períodos ────────────────────────────────────────────────
+
+    public function historial(Request $request): Response
+    {
+        $anioFiltro = $request->query('anio');
+
+        $anios = Periodo::distinct()->orderByDesc('anio')->pluck('anio');
+
+        $periodos = Periodo::when($anioFiltro, fn ($q) => $q->where('anio', $anioFiltro))
+            ->orderByDesc('anio')
+            ->get()
+            ->map(function (Periodo $p) {
+                $distribucion = CalificacionFinal::whereHas(
+                    'nomina', fn ($q) => $q->where('periodo_id', $p->id)
+                )
+                    ->where('es_apelacion', false)
+                    ->selectRaw('calificacion, count(*) as total')
+                    ->groupBy('calificacion')
+                    ->pluck('total', 'calificacion');
+
+                $totalEvaluados = CalificacionFinal::whereHas(
+                    'nomina', fn ($q) => $q->where('periodo_id', $p->id)
+                )->where('es_apelacion', false)->count();
+
+                return [
+                    'id'             => $p->id,
+                    'anio'           => $p->anio,
+                    'nombre'         => $p->nombre,
+                    'estado'         => $p->estado,
+                    'fecha_inicio'   => $p->fecha_inicio?->format('d/m/Y'),
+                    'fecha_cierre'   => $p->fecha_cierre?->format('d/m/Y'),
+                    'cerrado_en'     => $p->cerrado_en?->format('d/m/Y'),
+                    'total_evaluados'=> $totalEvaluados,
+                    'distribucion'   => $distribucion,
+                ];
+            });
+
+        return Inertia::render('AnalistaCCDA/Historial', [
+            'periodos'    => $periodos,
+            'anios'       => $anios,
+            'filtro_anio' => $anioFiltro ? (int) $anioFiltro : null,
+        ]);
+    }
+
+    public function historialDetalle(Periodo $periodo): Response
+    {
+        $nominas = Nomina::with([
+            'calificacionFinal',
+            'apelacion',
+            'evaluaciones' => fn ($q) => $q
+                ->where('es_apelacion', false)
+                ->with(['comentariosVicerrectora' => fn ($q) => $q->orderByDesc('created_at')]),
+        ])
+            ->where('periodo_id', $periodo->id)
+            ->get();
+
+        $evaluables = $nominas->filter(fn (Nomina $n) => $n->estado !== 'cerrado' && !in_array($n->estado, ['pendiente', 'en_carga']));
+        $daConocer  = $nominas->filter(fn (Nomina $n) => $n->estado === 'cerrado');
+
+        $mapAcademico = function (Nomina $n): array {
+            $calif = $n->calificacionFinal;
+            $comentarioVice = $n->evaluaciones
+                ->flatMap(fn ($e) => $e->comentariosVicerrectora)
+                ->sortByDesc('created_at')
+                ->first();
+
+            return [
+                'id'               => $n->id,
+                'nombre'           => $n->nombre,
+                'rut'              => $n->rut,
+                'cargo'            => $n->nombre_posicion,
+                'unidad'           => $n->unidad,
+                'facultad'         => $n->unidad_superior,
+                'categoria'        => $n->categoria,
+                'tipo_trabajador'  => $n->tipo_trabajador,
+                'horas_contrato'   => $n->horas_contrato,
+                'adscripcion'      => $n->adscripcion_academica,
+                'nota'             => $calif ? number_format((float) $calif->nota_final, 1) : null,
+                'concepto'         => $calif?->calificacionLabel(),
+                'fecha_calificacion'=> $calif?->fecha?->format('d/m/Y'),
+                'sin_calificacion' => (bool) ($n->evaluaciones->first()?->sin_calificacion),
+                'comentario_vice'  => $comentarioVice?->comentario,
+                'tiene_apelacion'  => (bool) $n->apelacion,
+                'estado'           => $n->estado,
+            ];
+        };
+
+        $porFacultad = $evaluables
+            ->map($mapAcademico)
+            ->sortBy('nombre')
+            ->groupBy('facultad')
+            ->map(fn ($grupo, $nombre) => [
+                'nombre'     => $nombre,
+                'academicos' => $grupo->values(),
+                'stats'      => [
+                    'total'        => $grupo->count(),
+                    'con_nota'     => $grupo->filter(fn ($a) => $a['nota'] !== null)->count(),
+                    'sin_nota'     => $grupo->filter(fn ($a) => $a['nota'] === null)->count(),
+                    'promedio'     => $grupo->filter(fn ($a) => $a['nota'] !== null)->count() > 0
+                        ? number_format(
+                            $grupo->filter(fn ($a) => $a['nota'] !== null)
+                                ->avg(fn ($a) => (float) $a['nota']),
+                            2
+                        )
+                        : null,
+                ],
+            ])
+            ->sortKeys()
+            ->values();
+
+        $distribucion = CalificacionFinal::whereHas(
+            'nomina', fn ($q) => $q->where('periodo_id', $periodo->id)
+        )
+            ->where('es_apelacion', false)
+            ->selectRaw('calificacion, count(*) as total')
+            ->groupBy('calificacion')
+            ->pluck('total', 'calificacion');
+
+        return Inertia::render('AnalistaCCDA/HistorialPeriodo', [
+            'periodo'     => [
+                'id'          => $periodo->id,
+                'nombre'      => $periodo->nombre,
+                'anio'        => $periodo->anio,
+                'estado'      => $periodo->estado,
+                'fecha_inicio'=> $periodo->fecha_inicio?->format('d/m/Y'),
+                'fecha_cierre'=> $periodo->fecha_cierre?->format('d/m/Y'),
+                'cerrado_en'  => $periodo->cerrado_en?->format('d/m/Y'),
+            ],
+            'por_facultad'=> $porFacultad,
+            'da_conocer'  => $daConocer->map($mapAcademico)->values(),
+            'distribucion'=> $distribucion,
+            'total'       => $evaluables->count(),
+        ]);
+    }
+
+    public function imprimirActaPeriodo(Periodo $periodo): View
+    {
+        $nominas = Nomina::with([
+            'calificacionFinal',
+            'evaluaciones' => fn ($q) => $q
+                ->where('es_apelacion', false)
+                ->with(['comentariosVicerrectora' => fn ($q) => $q->orderByDesc('created_at')]),
+        ])
+            ->where('periodo_id', $periodo->id)
+            ->get();
+
+        $evaluables = $nominas->filter(fn ($n) => $n->estado !== 'cerrado' && !in_array($n->estado, ['pendiente', 'en_carga']));
+        $daConocer  = $nominas->filter(fn ($n) => $n->estado === 'cerrado');
+
+        $mapRow = function (Nomina $n): array {
+            $calif = $n->calificacionFinal;
+            $comentarioVice = $n->evaluaciones
+                ->flatMap(fn ($e) => $e->comentariosVicerrectora)
+                ->sortByDesc('created_at')
+                ->first();
+
+            return [
+                'nombre'           => $n->nombre,
+                'rut'              => $n->rut,
+                'cargo'            => $n->nombre_posicion,
+                'categoria'        => $n->categoria,
+                'tipo_trabajador'  => $n->tipo_trabajador,
+                'horas_contrato'   => $n->horas_contrato,
+                'nota'             => $calif ? number_format((float) $calif->nota_final, 1) : null,
+                'concepto'         => $calif?->calificacionLabel(),
+                'comentario_vice'  => $comentarioVice?->comentario,
+                'facultad'         => $n->unidad_superior,
+            ];
+        };
+
+        $porFacultad = $evaluables
+            ->map($mapRow)
+            ->sortBy('nombre')
+            ->groupBy('facultad')
+            ->sortKeys();
+
+        $distribucion = CalificacionFinal::whereHas(
+            'nomina', fn ($q) => $q->where('periodo_id', $periodo->id)
+        )
+            ->where('es_apelacion', false)
+            ->selectRaw('calificacion, count(*) as total')
+            ->groupBy('calificacion')
+            ->pluck('total', 'calificacion');
+
+        $generadoPor = auth()->user()->name ?? 'Sistema';
+
+        return view('analista.acta_periodo', compact('periodo', 'porFacultad', 'daConocer', 'distribucion', 'generadoPor'));
     }
 }

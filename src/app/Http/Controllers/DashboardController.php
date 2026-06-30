@@ -121,7 +121,9 @@ class DashboardController extends Controller
         $evaluados = 0;
         if ($periodo) {
             $evaluados = Nomina::where('periodo_id', $periodo->id)
-                ->whereIn('estado', ['evaluado', 'cerrado'])
+                ->evaluables()
+                ->whereIn('estado', ['evaluado', 'cerrado', 'apelado'])
+                ->whereHas('calificacionFinal')
                 ->count();
         }
 
@@ -157,6 +159,7 @@ class DashboardController extends Controller
                 $stats = [
                     'evidencias_cargadas'  => $nomina->evidenciasNormales->count(),
                     'estado_nomina'        => $nomina->estado,
+                    'es_da_conocer'        => $nomina->esSoloDaConocer(),
                     'apelaciones_abiertas' => $apelacionesAbiertas,
                     'calificacion'         => $cf ? [
                         'nota_final'             => $cf->nota_final !== null

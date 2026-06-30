@@ -45,7 +45,7 @@ class DecanoController extends Controller
                 $directivos = Nomina::with(['academico', 'calificacionJefatura', 'asignacionesCargo'])
                     ->where('periodo_id', $periodo->id)
                     ->whereIn('id', $directivoIds)
-                    ->whereIn('estado', ['evaluado', 'apelado', 'cerrado', 'en_evaluacion', 'carga_cerrada'])
+                    ->whereIn('estado', ['pendiente', 'en_carga', 'carga_cerrada'])
                     ->get()
                     ->map(fn (Nomina $n) => [
                         'id'            => $n->id,
@@ -90,15 +90,8 @@ class DecanoController extends Controller
                     'email' => $nomina->academico->email,
                 ],
             ],
-            'categorias' => $categorias->map(fn ($c) => [
-                'id'     => $c->id,
-                'nombre' => $c->nombre,
-                'slug'   => $c->slug,
-            ]),
             'informe' => $informe ? [
-                'puntaje'             => $informe->puntaje,
                 'observacion_general' => $informe->observacionGeneral(),
-                'observaciones'       => $observaciones,
             ] : null,
         ]);
     }
@@ -108,31 +101,41 @@ class DecanoController extends Controller
         $user = auth()->user();
         $this->autorizarDecanoSobreNomina($user, $nomina);
 
-        $categorias = CategoriaApa::orderBy('orden')->pluck('slug')->toArray();
-        $rules      = [
-            'puntaje'             => ['required', 'integer', 'min:0', 'max:100'],
-            'observacion_general' => ['nullable', 'string', 'max:2000'],
-        ];
-        foreach ($categorias as $slug) {
-            $rules["obs_{$slug}"] = ['nullable', 'string', 'max:1000'];
-        }
-
-        $data = $request->validate($rules);
-
-        $observaciones = ['observacion_general' => $data['observacion_general'] ?? ''];
-        foreach ($categorias as $slug) {
-            $observaciones[$slug] = $data["obs_{$slug}"] ?? '';
-        }
+        $data = $request->validate([
+            'observacion' => ['nullable', 'string', 'max:3000'],
+        ]);
 
         CalificacionJefatura::updateOrCreate(
             ['nomina_id' => $nomina->id, 'jefe_id' => $user->id],
             [
-                'puntaje'    => $data['puntaje'],
-                'comentario' => json_encode($observaciones, JSON_UNESCAPED_UNICODE),
+                'puntaje'    => 0,
+                'comentario' => json_encode(
+                    ['observacion_general' => $data['observacion'] ?? ''],
+                    JSON_UNESCAPED_UNICODE
+                ),
             ]
         );
 
-        return back()->with('success', 'Informe de jefatura guardado.');
+        return back()->with('success', 'Informe de jefatura emitido correctamente.');
+    }
+
+    public function imprimir(Nomina $nomina)
+    {
+        $user = auth()->user();
+        $nomina->load(['academico', 'asignacionesCargo', 'periodo', 'calificacionJefatura.jefe']);
+        $this->autorizarDecanoSobreNomina($user, $nomina);
+
+        $informe = $nomina->calificacionJefatura;
+        abort_if(!$informe, 404, 'El informe aún no ha sido emitido.');
+
+        $categorias = CategoriaApa::orderBy('orden')->get();
+
+        return view('decano.informe_jefatura', [
+            'nomina'     => $nomina,
+            'informe'    => $informe,
+            'categorias' => $categorias,
+            'decano'     => $informe->jefe ?? $user,
+        ]);
     }
 
     private function esDecanoActivo($user, Periodo $periodo): bool

@@ -170,6 +170,14 @@ class SecretarioController extends Controller
             'evidenciasApelacionPorCategoria'  => $evidenciasApelacionPorCategoria,
             'totalEvidencias'                  => $evidencias->count(),
             'apelacion'                        => $this->formatApelacion($nomina),
+            'destinoApelacionCierre'           => $nomina->estado === 'evaluado' || $nomina->estado === 'apelado'
+                ? [
+                    'destino' => $nomina->destinoApelacionTrasCierre(),
+                    'label'   => \App\Services\CalificacionCadService::labelDestinoApelacion(
+                        $nomina->destinoApelacionTrasCierre()
+                    ),
+                ]
+                : null,
             'calificacionFinal'                => null,
         ]);
     }
@@ -431,6 +439,7 @@ class SecretarioController extends Controller
         return [
             'id'               => $ap->id,
             'estado'           => $ap->estado,
+            'destino'          => $ap->destino,
             'motivo'           => $ap->motivo,
             'resolucion'       => $ap->resolucion,
             'fecha_solicitud'  => $ap->fecha_solicitud->format('d/m/Y'),

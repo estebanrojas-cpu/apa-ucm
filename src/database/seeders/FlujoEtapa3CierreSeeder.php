@@ -56,8 +56,7 @@ class FlujoEtapa3CierreSeeder extends Seeder
 
         $ventanas = [
             'evaluacion_cca'          => [null,  $ayer],
-            // Comunicación cerrada ayer; apelaciones abiertas desde hoy (secuencial, sin solapamiento).
-            'comunicacion_resultados' => [$ayer->copy()->subDays(7), $ayer],
+            'comunicacion_resultados' => [$ayer->copy()->subDays(14), $ayer],
             'apelaciones'             => [$hoy, $hoy->copy()->addDays(14)],
             'registro_ccda'           => [$hoy->copy()->addDays(15), $hoy->copy()->addDays(25)],
             'revision_vicerrectoria'  => [$hoy->copy()->addDays(26), $hoy->copy()->addDays(35)],
@@ -174,7 +173,8 @@ class FlujoEtapa3CierreSeeder extends Seeder
         $this->command->info("  {$evaluados} expediente(s) en estado 'evaluado' (visibles para académico, vicerrectora y secretario).");
         $this->command->newLine();
         $this->command->info('  Rol académico:    puede apelar desde su panel.');
-        $this->command->info('  Rol secretario:   resuelve apelaciones → botón "Cerrar proceso".');
+        $this->command->info('  Rol secretario:   resuelve apelaciones → envía a CCA o CCDA según concepto.');
+        $this->command->info('  Rol analista:     Apelaciones 2° nivel (Regular/Deficiente) → /analista/apelaciones');
         $this->command->info('  Rol vicerrectora: revisa calificaciones y deja comentarios.');
     }
 }

@@ -46,6 +46,18 @@ export default function AnalistaCCDA({ stats }) {
                         href="/analista/registro-ccda"
                         linkLabel="Ver registro"
                     />
+                    <ActionCard
+                        title="Apelaciones 2° nivel"
+                        description="Resuelve apelaciones Regular/Deficiente derivadas por el secretario a la CCDA."
+                        href="/analista/apelaciones"
+                        linkLabel="Ver apelaciones"
+                    />
+                    <ActionCard
+                        title="Historial de períodos"
+                        description="Consulta los períodos anteriores con sus calificaciones, observaciones de Vicerrectoría y actas de cierre."
+                        href="/analista/historial"
+                        linkLabel="Ver historial"
+                    />
                 </div>
 
                 <p className="text-xs text-gray-400 mt-6">

@@ -62,6 +62,14 @@ class CargoPeriodoService
             ->exists();
     }
 
+    public function esDirectorDepartamentoPeriodo(Nomina $nomina): bool
+    {
+        return AsignacionCargo::where('periodo_id', $nomina->periodo_id)
+            ->where('nomina_id', $nomina->id)
+            ->where('cargo', CargoFacultad::DirectorDepartamento->value)
+            ->exists();
+    }
+
     public function esDirectivoPeriodo(Nomina $nomina): bool
     {
         return AsignacionCargo::where('periodo_id', $nomina->periodo_id)
@@ -91,12 +99,13 @@ class CargoPeriodoService
         ];
 
         $mapa = [
-            'secretario'           => CargoFacultad::Secretario->value,
-            'decano'               => CargoFacultad::Decano->value,
-            'director_escuela'     => CargoFacultad::DirectorEscuela->value,
-            'miembro_cca_1'        => CargoFacultad::MiembroCca->value,
-            'miembro_cca_2'        => CargoFacultad::MiembroCca->value,
-            'miembro_cca_sindicato'=> CargoFacultad::MiembroCcaSindicato->value,
+            'secretario'             => CargoFacultad::Secretario->value,
+            'decano'                 => CargoFacultad::Decano->value,
+            'director_escuela'       => CargoFacultad::DirectorEscuela->value,
+            'director_departamento'  => CargoFacultad::DirectorDepartamento->value,
+            'miembro_cca_1'          => CargoFacultad::MiembroCca->value,
+            'miembro_cca_2'          => CargoFacultad::MiembroCca->value,
+            'miembro_cca_sindicato'  => CargoFacultad::MiembroCcaSindicato->value,
         ];
 
         AsignacionCargo::where('periodo_id', $periodoId)
@@ -131,6 +140,35 @@ class CargoPeriodoService
         }
 
         $this->sincronizarComisionCca($periodoId, $facultadId, $ccaNominaIds, $asignadoPorId);
+
+        // Sincronizar userRoles para todos los usuarios con nómina en esta facultad+período
+        // más los CCA externos asignados (pueden ser de otra facultad).
+        $periodo      = Periodo::find($periodoId);
+
+        $nominaUsrIds = Nomina::where('periodo_id', $periodoId)
+            ->where('facultad_id', $facultadId)
+            ->whereNotNull('user_id')
+            ->pluck('user_id');
+
+        // Incluir también los CCA externos (miembro_cca_1, miembro_cca_2) de otras facultades.
+        $ccaExternosIds = AsignacionCargo::where('periodo_id', $periodoId)
+            ->where('facultad_id', $facultadId)
+            ->whereIn('slot', ['miembro_cca_1', 'miembro_cca_2'])
+            ->get()
+            ->map(fn ($a) => Nomina::find($a->nomina_id)?->user_id)
+            ->filter()
+            ->values();
+
+        $todosIds = $nominaUsrIds->merge($ccaExternosIds)->unique();
+
+        if ($todosIds->isNotEmpty()) {
+            User::whereIn('id', $todosIds)->each(function (User $user) use ($periodo) {
+                $cargoRoles = $this->rolesSesionDesdeCargos($user, $periodo);
+                $user->syncUserRoles(
+                    array_values(array_unique(array_merge(['academico'], $cargoRoles)))
+                );
+            });
+        }
     }
 
     /** @param list<string> $nominaIds */

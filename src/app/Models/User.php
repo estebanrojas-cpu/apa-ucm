@@ -109,22 +109,38 @@ class User extends Authenticatable
 
     public function puedeActuarComoCca(?Periodo $periodo = null): bool
     {
-        if (!$this->facultad_id) {
-            return false;
-        }
-
         $periodo ??= Periodo::where('estado', 'activo')->latest()->first();
 
         if (!$periodo) {
             return false;
         }
 
+        // CCA 1 y 2 son externos: pertenecen a otra facultad pero integran la comisión de esta.
+        // No filtramos por facultad_id del usuario, solo verificamos que esté en alguna comisión confirmada.
         return ComisionIntegrante::whereHas('nomina', fn ($q) => $q->where('user_id', $this->id))
             ->whereHas('comision', fn ($q) => $q
                 ->where('periodo_id', $periodo->id)
-                ->where('facultad_id', $this->facultad_id)
                 ->where('estado', 'confirmada'))
             ->exists();
+    }
+
+    /** Retorna la facultad_id cuya comisión CCA integra este usuario en el período dado. */
+    public function facultadDondeActuaComoCca(?Periodo $periodo = null): ?string
+    {
+        $periodo ??= Periodo::where('estado', 'activo')->latest()->first();
+
+        if (!$periodo) {
+            return null;
+        }
+
+        return ComisionIntegrante::whereHas('nomina', fn ($q) => $q->where('user_id', $this->id))
+            ->whereHas('comision', fn ($q) => $q
+                ->where('periodo_id', $periodo->id)
+                ->where('estado', 'confirmada'))
+            ->with('comision')
+            ->first()
+            ?->comision
+            ?->facultad_id;
     }
 
     public static function integrantesComisionPeriodo(string $periodoId, string $facultadId)

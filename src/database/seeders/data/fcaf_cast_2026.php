@@ -1,7 +1,7 @@
 <?php
 
 /**
- * Cast FCAF 2026 — facultad secundaria con roles multi-perfil y casos básicos.
+ * Cast FCAF 2026 — 4 académicos con roles multi-perfil y casos básicos.
  * Horas de contrato: 40 (jornada completa) · 24 (media jornada / hora).
  */
 return [
@@ -10,7 +10,7 @@ return [
         'rut'             => '22.111.222-3',
         'name'            => 'Rosa Edith Morales Vega',
         'email'           => 'rosa.morales@ucm.cl',
-        'roles'           => ['secretario', 'academico'],
+        'roles'           => ['academico'],
         'nomina'          => [
             'adscripcion_academica'  => 'Planta',
             'unidad_superior'        => 'Facultad de Ciencias Agrarias y Forestales',
@@ -55,7 +55,7 @@ return [
         'rut'             => '22.333.444-5',
         'name'            => 'Patricia Carmen Lagos Ríos',
         'email'           => 'patricia.lagos@ucm.cl',
-        'roles'           => ['jefe_academico'],
+        'roles'           => ['academico'],
         'nomina'          => [
             'adscripcion_academica'  => 'Planta',
             'unidad_superior'        => 'Facultad de Ciencias Agrarias y Forestales',
@@ -69,28 +69,6 @@ return [
             'historial'              => [
                 2024 => ['categoria' => 'titular', 'fecha_categorizacion' => '2013-03-01', 'nota' => 4.6, 'concepto' => 'Excelente'],
                 2026 => ['categoria' => 'titular', 'fecha_categorizacion' => '2013-03-01'],
-            ],
-        ],
-    ],
-    [
-        'numero_personal' => '104',
-        'rut'             => '22.444.555-6',
-        'name'            => 'Fernando Andrés Muñoz Pérez',
-        'email'           => 'fernando.munoz@ucm.cl',
-        'roles'           => ['academico'],
-        'nomina'          => [
-            'adscripcion_academica'  => 'Planta',
-            'unidad_superior'        => 'Facultad de Ciencias Agrarias y Forestales',
-            'unidad'                 => 'Depto. Agronomía',
-            'nombre_posicion'        => 'Profesor',
-            'tipo_trabajador'        => 'Académico Media Jornada',
-            'fecha_inicio_contrato'  => '2015-03-01',
-            'horas_contrato'         => 24,
-            'categoria'              => 'adjunto',
-            'fecha_categorizacion'   => '2019-03-01',
-            'historial'              => [
-                2024 => ['categoria' => 'adjunto', 'fecha_categorizacion' => '2019-03-01', 'nota' => 3.9, 'concepto' => 'Bueno'],
-                2026 => ['categoria' => 'adjunto', 'fecha_categorizacion' => '2019-03-01'],
             ],
         ],
     ],
@@ -114,27 +92,6 @@ return [
                 2024 => ['categoria' => 'titular', 'fecha_categorizacion' => '2015-03-01', 'nota' => 4.5, 'concepto' => 'Excelente'],
                 2025 => ['nota' => 4.6, 'concepto' => 'Excelente'],
                 2026 => ['categoria' => 'titular', 'fecha_categorizacion' => '2015-03-01'],
-            ],
-        ],
-    ],
-    [
-        'numero_personal' => '106',
-        'rut'             => '22.666.777-8',
-        'name'            => 'Camilo Esteban Ríos Bravo',
-        'email'           => 'camilo.rios@ucm.cl',
-        'roles'           => ['academico'],
-        'nomina'          => [
-            'adscripcion_academica'  => 'Contrata',
-            'unidad_superior'        => 'Facultad de Ciencias Agrarias y Forestales',
-            'unidad'                 => 'Depto. Agronomía',
-            'nombre_posicion'        => 'Profesor Instructor',
-            'tipo_trabajador'        => 'Académico Hora',
-            'fecha_inicio_contrato'  => '2025-03-01',
-            'horas_contrato'         => 24,
-            'categoria'              => 'instructor',
-            'fecha_categorizacion'   => '2025-03-01',
-            'historial'              => [
-                2026 => ['categoria' => 'instructor', 'fecha_categorizacion' => '2025-03-01'],
             ],
         ],
     ],

@@ -89,6 +89,7 @@ echo "  6. docker compose exec app php artisan db:seed --class=FlujoEtapa2CcaSee
 echo "     (solo marca carga_cerrada quien tenga S1+S2 APA confirmados y evidencias)"
 echo "  7. pedro/sandra → perfil Miembro CCA → evaluar (requiere S1+S2 completos)"
 echo "  8. docker compose exec app php artisan db:seed --class=FlujoEtapa3CierreSeeder"
+echo "     (apelaciones abiertas; Regular/Deficiente → CCDA en /analista/apelaciones)"
 echo ""
 echo "📧 En local, revisa el correo en Mailpit/logs si no llega al buzón real."
 echo ""

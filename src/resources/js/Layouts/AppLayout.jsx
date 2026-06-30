@@ -20,6 +20,8 @@ const navByRole = {
     analista_ccda: [
         { label: 'Dashboard',      href: '/analista/dashboard',      icon: 'grid' },
         { label: 'Períodos',       href: '/analista/periodos',       icon: 'calendar' },
+        { label: 'Apelaciones',    href: '/analista/apelaciones',    icon: 'folder' },
+        { label: 'Registro CCDA',  href: '/analista/registro-ccda',  icon: 'folder' },
         { label: 'Solicitudes',    href: '/analista/solicitudes',    icon: 'folder' },
         { label: 'Estado proceso', href: '/analista/estado-proceso', icon: 'chart' },
     ],

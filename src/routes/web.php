@@ -83,6 +83,11 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/registro-ccda',                     [AnalistaCCDAController::class, 'registroCcda'])->name('analista.registro-ccda');
         Route::post('/registro-ccda/{facultad}',         [AnalistaCCDAController::class, 'storeVerificacion'])->name('analista.registro-ccda.store');
+        Route::post('/periodos/{periodo}/cerrar',        [AnalistaCCDAController::class, 'cerrarPeriodo'])->name('analista.periodos.cerrar');
+
+        Route::get('/historial',                         [AnalistaCCDAController::class, 'historial'])->name('analista.historial');
+        Route::get('/historial/{periodo}',               [AnalistaCCDAController::class, 'historialDetalle'])->name('analista.historial.detalle');
+        Route::get('/historial/{periodo}/imprimir',      [AnalistaCCDAController::class, 'imprimirActaPeriodo'])->name('analista.historial.imprimir');
 
         Route::get('/apelaciones',                                                  [AnalistaCCDAController::class, 'apelaciones'])->name('analista.apelaciones');
         Route::get('/apelaciones/{nomina}',                                         [AnalistaCCDAController::class, 'showApelacion'])->name('analista.apelaciones.show');
@@ -142,9 +147,10 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware('role:decano')->prefix('decano')->group(function () {
-        Route::get('/directivos',                   [DecanoController::class, 'index'])->name('decano.directivos');
-        Route::get('/directivos/{nomina}',          [DecanoController::class, 'show'])->name('decano.directivos.show');
-        Route::post('/directivos/{nomina}/informe', [DecanoController::class, 'store'])->name('decano.directivos.store');
+        Route::get('/directivos',                          [DecanoController::class, 'index'])->name('decano.directivos');
+        Route::get('/directivos/{nomina}',                 [DecanoController::class, 'show'])->name('decano.directivos.show');
+        Route::post('/directivos/{nomina}/informe',        [DecanoController::class, 'store'])->name('decano.directivos.store');
+        Route::get('/directivos/{nomina}/imprimir',        [DecanoController::class, 'imprimir'])->name('decano.directivos.imprimir');
     });
 
     Route::middleware(['role:academico', 'academico.no_licencia'])->prefix('academico')->group(function () {

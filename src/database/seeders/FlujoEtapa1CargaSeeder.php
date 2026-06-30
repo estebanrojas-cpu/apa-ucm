@@ -21,9 +21,9 @@ use Illuminate\Database\Seeder;
  *  - carga_evidencias         → inicio D-7,  fin D+20  (abierta)
  *  - validacion_secretario    → inicio D-7,  fin D+20  (paralela, abierta)
  *  - informe_jefatura         → inicio D-7,  fin D+20  (paralela, abierta)
- *  - evaluacion_cca           → inicio D+21, fin D+40  (futura)
- *  - comunicacion_resultados  → inicio D+41, fin D+50  (futura)
- *  - apelaciones              → inicio D+51, fin D+65  (futura)
+ *  - evaluacion_cca           → inicio D+21, fin D+40  (futura, misma ventana que comunicación)
+ *  - comunicacion_resultados  → inicio D+21, fin D+40
+ *  - apelaciones              → inicio D+41, fin D+55
  *  - registro_ccda            → inicio D+66, fin D+75  (futura)
  *  - revision_vicerrectoria   → inicio D+76, fin D+90  (futura)
  *  - plazo_facultad           → fecha_limite D+20, cerrado_en = NULL
@@ -47,10 +47,10 @@ class FlujoEtapa1CargaSeeder extends Seeder
             'validacion_secretario'   => [$hoy->copy()->subDays(7),  $hoy->copy()->addDays(20)],
             'informe_jefatura'        => [$hoy->copy()->subDays(7),  $hoy->copy()->addDays(20)],
             'evaluacion_cca'          => [$hoy->copy()->addDays(21), $hoy->copy()->addDays(40)],
-            'comunicacion_resultados' => [$hoy->copy()->addDays(41), $hoy->copy()->addDays(50)],
-            'apelaciones'             => [$hoy->copy()->addDays(51), $hoy->copy()->addDays(65)],
-            'registro_ccda'           => [$hoy->copy()->addDays(66), $hoy->copy()->addDays(75)],
-            'revision_vicerrectoria'  => [$hoy->copy()->addDays(76), $hoy->copy()->addDays(90)],
+            'comunicacion_resultados' => [$hoy->copy()->addDays(21), $hoy->copy()->addDays(40)],
+            'apelaciones'             => [$hoy->copy()->addDays(41), $hoy->copy()->addDays(55)],
+            'registro_ccda'           => [$hoy->copy()->addDays(56), $hoy->copy()->addDays(65)],
+            'revision_vicerrectoria'  => [$hoy->copy()->addDays(66), $hoy->copy()->addDays(80)],
         ];
 
         foreach ($ventanas as $etapa => [$inicio, $fin]) {

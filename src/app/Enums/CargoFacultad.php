@@ -4,11 +4,12 @@ namespace App\Enums;
 
 enum CargoFacultad: string
 {
-    case Secretario          = 'secretario';
-    case Decano              = 'decano';
-    case DirectorEscuela     = 'director_escuela';
-    case MiembroCca          = 'miembro_cca';
-    case MiembroCcaSindicato = 'miembro_cca_sindicato';
+    case Secretario            = 'secretario';
+    case Decano                = 'decano';
+    case DirectorEscuela       = 'director_escuela';
+    case DirectorDepartamento  = 'director_departamento';
+    case MiembroCca            = 'miembro_cca';
+    case MiembroCcaSindicato   = 'miembro_cca_sindicato';
 
   /** @return list<string> */
     public static function valores(): array
@@ -19,11 +20,12 @@ enum CargoFacultad: string
     public function label(): string
     {
         return match ($this) {
-            self::Secretario          => 'Secretario/a de Facultad',
-            self::Decano              => 'Decano/a',
-            self::DirectorEscuela     => 'Director/a de Escuela',
-            self::MiembroCca          => 'Miembro CCA',
-            self::MiembroCcaSindicato => 'Miembro CCA (Sindicato)',
+            self::Secretario           => 'Secretario/a de Facultad',
+            self::Decano               => 'Decano/a',
+            self::DirectorEscuela      => 'Director/a de Escuela',
+            self::DirectorDepartamento => 'Director/a de Departamento',
+            self::MiembroCca           => 'Miembro CCA',
+            self::MiembroCcaSindicato  => 'Miembro CCA (Sindicato)',
         };
     }
 
@@ -46,11 +48,12 @@ enum CargoFacultad: string
     public function rolSesion(): ?string
     {
         return match ($this) {
-            self::Secretario      => 'secretario',
-            self::Decano          => 'decano',
+            self::Secretario           => 'secretario',
+            self::Decano               => 'decano',
+            self::DirectorDepartamento => 'director_departamento',
             self::MiembroCca,
-            self::MiembroCcaSindicato => 'miembro_cca',
-            self::DirectorEscuela => null,
+            self::MiembroCcaSindicato  => 'miembro_cca',
+            self::DirectorEscuela      => null,
         };
     }
 }

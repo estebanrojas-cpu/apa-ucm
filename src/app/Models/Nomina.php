@@ -185,7 +185,13 @@ class Nomina extends Model
      */
     public function esSoloDaConocer(): bool
     {
-        if (app(\App\Services\CargoPeriodoService::class)->esDecanoPeriodo($this)) {
+        $cargos = app(\App\Services\CargoPeriodoService::class);
+
+        if ($cargos->esDecanoPeriodo($this)) {
+            return true;
+        }
+
+        if ($cargos->esDirectorDepartamentoPeriodo($this)) {
             return true;
         }
 
@@ -458,13 +464,51 @@ class Nomina extends Model
     /** Apelación cerrada por secretario y pendiente de re-evaluación CCA. */
     public function requiereReevaluacionApelacionCca(): bool
     {
-        $apelacion = $this->relationLoaded('apelacion') ? $this->apelacion : $this->apelacion()->first();
+        $apelacion = $this->apelacionActivaResuelta();
 
-        if (!$apelacion || $apelacion->estado !== 'resuelta') {
+        if (!$apelacion || ($apelacion->destino ?? 'cca') !== 'cca') {
             return false;
         }
 
-        return !$this->calificacionFinal()->where('es_apelacion', true)->exists();
+        return !$this->tieneCalificacionApelacion();
+    }
+
+    /** Apelación Regular/Deficiente enviada a CCDA (2° nivel). */
+    public function requiereEvaluacionApelacionCcda(): bool
+    {
+        $apelacion = $this->apelacionActivaResuelta();
+
+        if (!$apelacion || ($apelacion->destino ?? 'cca') !== 'ccda') {
+            return false;
+        }
+
+        return !$this->tieneCalificacionApelacion();
+    }
+
+    public function destinoApelacionTrasCierre(): string
+    {
+        $concepto = $this->calificacionesFinales()
+            ->where('es_apelacion', false)
+            ->latest('created_at')
+            ->value('calificacion');
+
+        return CalificacionCadService::destinoApelacionParaConcepto($concepto);
+    }
+
+    protected function apelacionActivaResuelta(): ?Apelacion
+    {
+        $apelacion = $this->relationLoaded('apelacion') ? $this->apelacion : $this->apelacion()->first();
+
+        if (!$apelacion || $apelacion->estado !== 'resuelta') {
+            return null;
+        }
+
+        return $apelacion;
+    }
+
+    protected function tieneCalificacionApelacion(): bool
+    {
+        return $this->calificacionesFinales()->where('es_apelacion', true)->exists();
     }
 
     public function scopeListosEvaluacionCca($query)

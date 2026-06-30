@@ -1,4 +1,4 @@
-import { Head, useForm, usePage } from '@inertiajs/react';
+import { Head, useForm, usePage, router } from '@inertiajs/react';
 import { useState } from 'react';
 import AppLayout from '@/Layouts/AppLayout';
 
@@ -265,8 +265,19 @@ export default function RegistroCcda({
     facultades,
     total_facultades,
     facultades_verificadas,
+    puede_cerrar,
 }) {
     const { flash } = usePage().props;
+    const [confirmandoCierre, setConfirmandoCierre] = useState(false);
+    const [cierreProcessing, setCierreProcessing] = useState(false);
+
+    function cerrarPeriodo() {
+        if (!periodo) return;
+        setCierreProcessing(true);
+        router.post(`/analista/periodos/${periodo.id}/cerrar`, {}, {
+            onFinish: () => { setCierreProcessing(false); setConfirmandoCierre(false); },
+        });
+    }
 
     const pctGlobal = total_facultades > 0
         ? Math.round((facultades_verificadas / total_facultades) * 100)
@@ -304,7 +315,7 @@ export default function RegistroCcda({
 
                 {/* Progreso global */}
                 {total_facultades > 0 && (
-                    <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
+                    <div className={`rounded-xl border p-5 mb-6 ${periodo?.cerrado_en ? 'bg-green-50 border-green-200' : 'bg-white border-gray-200'}`}>
                         <div className="flex items-center justify-between mb-2">
                             <p className="text-sm font-medium text-gray-700">Progreso global</p>
                             <p className="text-sm font-semibold text-[#1B2D6B]">
@@ -317,11 +328,67 @@ export default function RegistroCcda({
                                 style={{ width: `${pctGlobal}%` }}
                             />
                         </div>
-                        {pctGlobal === 100 && (
+
+                        {/* Estado de cierre */}
+                        {periodo?.cerrado_en ? (
+                            <div className="mt-3 flex items-center gap-3 flex-wrap">
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-100 text-green-800 text-sm font-semibold">
+                                    Período cerrado — {periodo.cerrado_en}
+                                </span>
+                                <a
+                                    href={`/analista/historial/${periodo.id}`}
+                                    className="text-sm text-[#0096D6] hover:underline"
+                                >
+                                    Ver historial del período →
+                                </a>
+                            </div>
+                        ) : puede_cerrar ? (
+                            <div className="mt-3 pt-3 border-t border-gray-100">
+                                {confirmandoCierre ? (
+                                    <div className="rounded-lg bg-red-50 border border-red-200 px-4 py-3">
+                                        <p className="text-sm font-semibold text-red-800 mb-1">¿Confirmar cierre del período?</p>
+                                        <p className="text-xs text-red-700 mb-3">
+                                            Esta acción es irreversible. El período quedará cerrado y pasará al historial.
+                                            No se podrán registrar más calificaciones ni modificaciones.
+                                        </p>
+                                        <div className="flex gap-2">
+                                            <button
+                                                type="button"
+                                                disabled={cierreProcessing}
+                                                onClick={cerrarPeriodo}
+                                                className="px-4 py-1.5 text-xs font-medium bg-red-700 text-white rounded-lg hover:bg-red-800 disabled:opacity-50"
+                                            >
+                                                {cierreProcessing ? 'Cerrando...' : 'Sí, cerrar período'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => setConfirmandoCierre(false)}
+                                                className="px-4 py-1.5 text-xs font-medium border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                                            >
+                                                Cancelar
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-xs text-gray-500">
+                                            Todas las facultades verificadas. Puedes cerrar formalmente el período.
+                                        </p>
+                                        <button
+                                            type="button"
+                                            onClick={() => setConfirmandoCierre(true)}
+                                            className="px-4 py-2 text-sm font-semibold bg-[#1B2D6B] text-white rounded-lg hover:bg-[#152558] transition-colors"
+                                        >
+                                            Cerrar período
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        ) : pctGlobal === 100 ? (
                             <p className="text-xs text-green-700 mt-2 font-medium">
-                                Todas las facultades han sido verificadas. El proceso está listo para revisión de Vicerrectoría.
+                                Todas las facultades verificadas. El proceso está listo para ser cerrado.
                             </p>
-                        )}
+                        ) : null}
                     </div>
                 )}
 

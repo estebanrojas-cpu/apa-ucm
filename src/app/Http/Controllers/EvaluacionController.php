@@ -31,13 +31,15 @@ class EvaluacionController extends Controller
         $evaluacionHabilitada = false;
         $fechaAperturaEval  = null;
 
-        if ($periodo && $user->facultad_id && $user->puedeActuarComoCca($periodo)) {
+        $facultadEvaluada = $user->facultadDondeActuaComoCca($periodo);
+
+        if ($periodo && $user->puedeActuarComoCca($periodo) && $facultadEvaluada) {
             $etapaCarga = Cronograma::where('periodo_id', $periodo->id)
                 ->where('etapa', 'validacion_secretario')
                 ->first();
 
             $comisionConfirmada = ComisionCca::where('periodo_id', $periodo->id)
-                ->where('facultad_id', $user->facultad_id)
+                ->where('facultad_id', $facultadEvaluada)
                 ->where('estado', 'confirmada')
                 ->exists();
 
@@ -52,11 +54,12 @@ class EvaluacionController extends Controller
                     'evidenciasNormales', 'evidenciasApelacion', 'compromisos', 'apelacion',
                 ])
                     ->where('periodo_id', $periodo->id)
-                    ->where('facultad_id', $user->facultad_id)
+                    ->where('facultad_id', $facultadEvaluada)
                     ->listosEvaluacionCca()
                     ->where('user_id', '!=', $user->id)
                     ->orderBy('created_at')
                     ->get()
+                    ->reject(fn (Nomina $n) => $n->requiereEvaluacionApelacionCcda())
                     ->map(function (Nomina $n) use ($user) {
                         $cf = $n->calificacionFinal;
                         $enApelacion = $n->requiereReevaluacionApelacionCca();
@@ -104,21 +107,19 @@ class EvaluacionController extends Controller
             'expedientes'           => $expedientes->values(),
             'evaluacionHabilitada'  => $evaluacionHabilitada,
             'fechaAperturaEval'     => $fechaAperturaEval,
-            'comisionConfirmada'    => $periodo && $user->facultad_id
-                ? ComisionCca::where('periodo_id', $periodo->id)
-                    ->where('facultad_id', $user->facultad_id)
-                    ->where('estado', 'confirmada')
-                    ->exists()
-                : false,
+            'comisionConfirmada'    => $comisionConfirmada ?? false,
             'esIntegranteComision'  => $user->puedeActuarComoCca($periodo),
+            'esSindicato'           => $periodo ? $this->esSindicatoCca($user, $periodo) : false,
         ]);
     }
 
     public function show(Nomina $nomina): Response
     {
         $user = auth()->user();
+        $periodo = $nomina->periodo;
 
-        if ($nomina->academico->facultad_id !== $user->facultad_id) {
+        $facultadEvaluada = $user->facultadDondeActuaComoCca($periodo);
+        if ($nomina->facultad_id !== $facultadEvaluada) {
             abort(403);
         }
 
@@ -131,6 +132,11 @@ class EvaluacionController extends Controller
         }
 
         $this->autorizarEvaluacionCca($nomina, $user);
+
+        if ($nomina->requiereEvaluacionApelacionCcda()) {
+            return redirect()->route('cca.expedientes')
+                ->with('error', 'Esta apelación corresponde a evaluación CCDA (2° nivel), no a la CCA.');
+        }
 
         if (!in_array($nomina->estado, ['carga_cerrada', 'en_evaluacion', 'evaluado'])) {
             abort(403);
@@ -145,7 +151,7 @@ class EvaluacionController extends Controller
                 ->with('error', 'La evaluación se habilita cuando cierre la validación del secretario ('.$etapaCarga->fecha_fin->format('d/m/Y').').');
         }
 
-        $nomina->load(['academico.facultad', 'academico.departamento', 'compromisos', 'evidenciasNormales', 'evidenciasApelacion']);
+        $nomina->load(['academico.facultad', 'academico.departamento', 'compromisos', 'evidenciasNormales', 'evidenciasApelacion', 'calificacionJefatura.jefe']);
 
         $apelacion   = $nomina->apelacion;
         $esApelacion = $nomina->requiereReevaluacionApelacionCca();
@@ -256,6 +262,13 @@ class EvaluacionController extends Controller
             ] : null,
             'sinCompromisoApa'       => $sinCompromiso,
             'compromisosSemestres'   => $this->compromisosSemestresPayload($nomina),
+            'informeJefatura'        => $nomina->calificacionJefatura ? [
+                'puntaje'             => $nomina->calificacionJefatura->puntaje,
+                'calificacion_label'  => $nomina->calificacionJefatura->calificacionLabel(),
+                'observacion_general' => $nomina->calificacionJefatura->observacionGeneral(),
+                'observaciones'       => $nomina->calificacionJefatura->observaciones(),
+                'jefe'                => $nomina->calificacionJefatura->jefe?->name,
+            ] : null,
         ]);
     }
 
@@ -346,14 +359,20 @@ class EvaluacionController extends Controller
 
     public function store(Request $request, Nomina $nomina)
     {
-        $user = auth()->user();
+        $user    = auth()->user();
+        $periodo = $nomina->periodo;
 
-        if ($nomina->academico->facultad_id !== $user->facultad_id) {
+        $facultadEvaluada = $user->facultadDondeActuaComoCca($periodo);
+        if ($nomina->facultad_id !== $facultadEvaluada) {
             abort(403);
         }
 
         if ($nomina->esSoloDaConocer()) {
             abort(403, $nomina->labelExclusionEvaluacion() ?? 'Este académico no participa del proceso evaluativo.');
+        }
+
+        if ($this->esSindicatoCca($user, $periodo)) {
+            abort(403, 'El miembro sindicato es ministro de fe y no puede registrar evaluaciones.');
         }
 
         $this->autorizarEvaluacionCca($nomina, $user);
@@ -531,14 +550,20 @@ class EvaluacionController extends Controller
 
     public function finalize(Request $request, Nomina $nomina)
     {
-        $user = auth()->user();
+        $user    = auth()->user();
+        $periodo = $nomina->periodo;
 
-        if ($nomina->academico->facultad_id !== $user->facultad_id) {
+        $facultadEvaluada = $user->facultadDondeActuaComoCca($periodo);
+        if ($nomina->facultad_id !== $facultadEvaluada) {
             abort(403);
         }
 
         if ($nomina->esSoloDaConocer()) {
             abort(403, $nomina->labelExclusionEvaluacion() ?? 'Este académico no participa del proceso evaluativo.');
+        }
+
+        if ($this->esSindicatoCca($user, $periodo)) {
+            abort(403, 'El miembro sindicato es ministro de fe y no puede finalizar evaluaciones.');
         }
 
         $this->autorizarEvaluacionCca($nomina, $user);
@@ -644,5 +669,13 @@ class EvaluacionController extends Controller
         if (!$nomina->listoParaEvaluacionCca()) {
             abort(403, $nomina->motivoNoListoEvaluacionCca() ?? 'El expediente no está listo para evaluación CCA.');
         }
+    }
+
+    private function esSindicatoCca($user, Periodo $periodo): bool
+    {
+        return \App\Models\AsignacionCargo::where('periodo_id', $periodo->id)
+            ->where('slot', 'miembro_cca_sindicato')
+            ->whereHas('nomina', fn ($q) => $q->where('user_id', $user->id))
+            ->exists();
     }
 }

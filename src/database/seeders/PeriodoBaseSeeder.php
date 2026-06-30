@@ -69,10 +69,10 @@ class PeriodoBaseSeeder extends Seeder
             ['etapa' => 'validacion_secretario',   'fecha_fin' => $inicio->copy()->addDays(30)->toDateString()],
             ['etapa' => 'informe_jefatura',        'fecha_fin' => $inicio->copy()->addDays(30)->toDateString()],
             ['etapa' => 'evaluacion_cca',          'fecha_fin' => $inicio->copy()->addDays(60)->toDateString()],
-            ['etapa' => 'comunicacion_resultados', 'fecha_fin' => $inicio->copy()->addDays(80)->toDateString()],
-            ['etapa' => 'apelaciones',             'fecha_fin' => $inicio->copy()->addDays(100)->toDateString()],
-            ['etapa' => 'registro_ccda',           'fecha_fin' => $inicio->copy()->addDays(115)->toDateString()],
-            ['etapa' => 'revision_vicerrectoria',  'fecha_fin' => $inicio->copy()->addDays(130)->toDateString()],
+            ['etapa' => 'comunicacion_resultados', 'fecha_fin' => $inicio->copy()->addDays(60)->toDateString()],
+            ['etapa' => 'apelaciones',             'fecha_fin' => $inicio->copy()->addDays(80)->toDateString()],
+            ['etapa' => 'registro_ccda',           'fecha_fin' => $inicio->copy()->addDays(95)->toDateString()],
+            ['etapa' => 'revision_vicerrectoria',  'fecha_fin' => $inicio->copy()->addDays(110)->toDateString()],
         ];
 
         foreach (Cronograma::prepararParaGuardar($inicio->toDateString(), $fines) as $etapa) {
@@ -132,10 +132,7 @@ class PeriodoBaseSeeder extends Seeder
                     'nombre'          => $persona['name'],
                     'numero_personal' => $persona['numero_personal'],
                     'datos_adicionales' => $datosAdicionales ?: null,
-                    'estado'          => str_contains(mb_strtolower($nominaData['nombre_posicion'] ?? ''), 'decana')
-                        || str_contains(mb_strtolower($nominaData['nombre_posicion'] ?? ''), 'decano')
-                        ? 'cerrado'
-                        : 'pendiente',
+                    'estado'          => 'pendiente',
                     'con_licencia'    => false,
                 ]));
 

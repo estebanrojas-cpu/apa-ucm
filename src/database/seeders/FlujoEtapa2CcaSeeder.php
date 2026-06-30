@@ -24,7 +24,7 @@ use Illuminate\Database\Seeder;
  *  - validacion_secretario   → fin = ayer  (cerrada → habilita evaluación CCA)
  *  - informe_jefatura        → fin = ayer  (cerrada)
  *  - evaluacion_cca          → inicio = ayer, fin = D+20  (ABIERTA)
- *  - comunicacion_resultados → inicio = D+21, fin = D+30
+ *  - comunicacion_resultados → mismas fechas que evaluacion_cca
  *  - apelaciones             → inicio = D+31, fin = D+45
  *  - registro_ccda           → inicio = D+46, fin = D+55
  *  - revision_vicerrectoria  → inicio = D+56, fin = D+65
@@ -50,10 +50,10 @@ class FlujoEtapa2CcaSeeder extends Seeder
             'validacion_secretario'   => [$hoy->copy()->subDays(27), $ayer],
             'informe_jefatura'        => [$hoy->copy()->subDays(27), $ayer],
             'evaluacion_cca'          => [$ayer,                     $hoy->copy()->addDays(20)],
-            'comunicacion_resultados' => [$hoy->copy()->addDays(21), $hoy->copy()->addDays(30)],
-            'apelaciones'             => [$hoy->copy()->addDays(31), $hoy->copy()->addDays(45)],
-            'registro_ccda'           => [$hoy->copy()->addDays(46), $hoy->copy()->addDays(55)],
-            'revision_vicerrectoria'  => [$hoy->copy()->addDays(56), $hoy->copy()->addDays(65)],
+            'comunicacion_resultados' => [$ayer,                     $hoy->copy()->addDays(20)],
+            'apelaciones'             => [$hoy->copy()->addDays(21), $hoy->copy()->addDays(35)],
+            'registro_ccda'           => [$hoy->copy()->addDays(36), $hoy->copy()->addDays(45)],
+            'revision_vicerrectoria'  => [$hoy->copy()->addDays(46), $hoy->copy()->addDays(55)],
         ];
 
         foreach ($ventanas as $etapa => [$inicio, $fin]) {

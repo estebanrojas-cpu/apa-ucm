@@ -69,23 +69,37 @@ class StorePeriodoRequest extends FormRequest
                 }
             }
 
+            $finBloqueA = collect(Cronograma::ETAPAS_BLOQUE_A)
+                ->map(fn (string $e) => $finesPorEtapa->get($e))
+                ->filter()
+                ->max();
+
             $secuencia = [
-                ['actual' => 'evaluacion_cca',          'previa' => 'validacion_secretario',  'label' => 'Evaluación CCA'],
-                ['actual' => 'comunicacion_resultados', 'previa' => 'evaluacion_cca',         'label' => 'Comunicación de Resultados'],
-                ['actual' => 'apelaciones',             'previa' => 'comunicacion_resultados','label' => 'Apelaciones'],
-                ['actual' => 'registro_ccda',           'previa' => 'apelaciones',            'label' => 'Registro CCDA'],
-                ['actual' => 'revision_vicerrectoria',  'previa' => 'registro_ccda',          'label' => 'Revisión Vicerrectoría'],
+                ['actual' => 'evaluacion_cca',         'previa' => $finBloqueA, 'label' => 'Evaluación CCA', 'previa_es_fecha' => true],
+                ['actual' => 'apelaciones',            'previa' => 'evaluacion_cca', 'label' => 'Apelaciones'],
+                ['actual' => 'registro_ccda',          'previa' => 'apelaciones', 'label' => 'Registro CCDA'],
+                ['actual' => 'revision_vicerrectoria', 'previa' => 'registro_ccda', 'label' => 'Revisión Vicerrectoría'],
             ];
 
             foreach ($secuencia as $par) {
-                $finActual  = $finesPorEtapa->get($par['actual']);
-                $finPrevia  = $finesPorEtapa->get($par['previa']);
+                $finActual = $finesPorEtapa->get($par['actual']);
+                $finPrevia = ($par['previa_es_fecha'] ?? false)
+                    ? $par['previa']
+                    : $finesPorEtapa->get($par['previa']);
 
                 if ($finActual && $finPrevia && $finActual < $finPrevia) {
                     $idx = collect($cronograma)->search(fn ($e) => ($e['etapa'] ?? null) === $par['actual']);
                     $key = $idx !== false ? "cronograma.$idx.fecha_fin" : 'cronograma';
                     $v->errors()->add($key, "{$par['label']} no puede cerrar antes que la etapa anterior.");
                 }
+            }
+
+            $finEval = $finesPorEtapa->get('evaluacion_cca');
+            $finCom  = $finesPorEtapa->get('comunicacion_resultados');
+            if ($finEval && $finCom && $finCom !== $finEval) {
+                $idx = collect($cronograma)->search(fn ($e) => ($e['etapa'] ?? null) === 'comunicacion_resultados');
+                $key = $idx !== false ? "cronograma.$idx.fecha_fin" : 'cronograma';
+                $v->errors()->add($key, 'Comunicación de Resultados debe cerrar la misma fecha que Evaluación CCA.');
             }
         });
     }

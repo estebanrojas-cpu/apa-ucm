@@ -14,6 +14,7 @@ use Carbon\Carbon;
 use App\Mail\CredencialesAcademicoMail;
 use App\Mail\InicioProcesoMail;
 use App\Models\Cronograma;
+use App\Services\CargoPeriodoService;
 use App\Services\NominaAccesoService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -447,6 +448,13 @@ class NominaController extends Controller
             try {
                 $eraNuevo = !$nomina->user_id;
                 $user     = $this->acceso->provisionarUsuario($nomina);
+
+                // Sincronizar roles de cargo (cubre el caso: cargos asignados ANTES de enviar acceso).
+                $cargoRoles = app(CargoPeriodoService::class)->rolesSesionDesdeCargos($user, $periodo);
+                if (!empty($cargoRoles)) {
+                    $current = $user->assignedRoles();
+                    $user->syncUserRoles(array_values(array_unique(array_merge($current, $cargoRoles))));
+                }
 
                 if ($eraNuevo) {
                     $password = $this->acceso->passwordDesdeRut($user->rut ?? '');

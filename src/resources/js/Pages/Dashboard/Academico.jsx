@@ -37,6 +37,7 @@ function getApelacionInfo(ap, calificacion) {
 
 export default function Academico({ stats, periodo, compromisoApa }) {
     const { flash } = usePage().props;
+    const esDaConocer        = stats?.es_da_conocer ?? false;
     const estado             = estadoLabels[stats?.estado_nomina];
     const calificacion       = stats?.calificacion ?? null;
     const apelacion          = stats?.apelacion ?? null;
@@ -54,6 +55,16 @@ export default function Academico({ stats, periodo, compromisoApa }) {
                     <p className="text-sm text-gray-500 -mt-4 mb-6">
                         Período activo: <span className="font-medium text-gray-700">{periodo.nombre}</span>
                     </p>
+                )}
+
+                {esDaConocer && (
+                    <div className="mb-6 rounded-xl bg-blue-50 border border-blue-200 px-5 py-4">
+                        <p className="text-sm font-semibold text-blue-800">Se da a conocer</p>
+                        <p className="text-sm text-blue-700 mt-0.5">
+                            En tu rol de Decano/a o directivo/a no participas del proceso evaluativo CCA.
+                            Tu calificación vigente queda registrada como referencia institucional.
+                        </p>
+                    </div>
                 )}
 
                 {flash?.success && (
@@ -201,24 +212,26 @@ export default function Academico({ stats, periodo, compromisoApa }) {
                     </div>
                 )}
 
-                <div className="bg-white rounded-xl border border-gray-200 p-6 flex items-center justify-between">
-                    <div>
-                        <h2 className="font-semibold text-gray-800">Carga de evidencias</h2>
-                        <p className="text-sm text-gray-500 mt-1">
-                            {compromisoApa?.participa_evaluacion === false
-                                ? 'No aplica este período: su categoría solo registra la declaración APA semestral.'
-                                : 'Suba sus documentos por categoría APA para el período activo.'}
-                        </p>
+                {!esDaConocer && (
+                    <div className="bg-white rounded-xl border border-gray-200 p-6 flex items-center justify-between">
+                        <div>
+                            <h2 className="font-semibold text-gray-800">Carga de evidencias</h2>
+                            <p className="text-sm text-gray-500 mt-1">
+                                {compromisoApa?.participa_evaluacion === false
+                                    ? 'No aplica este período: su categoría solo registra la declaración APA semestral.'
+                                    : 'Suba sus documentos por categoría APA para el período activo.'}
+                            </p>
+                        </div>
+                        {compromisoApa?.participa_evaluacion !== false && (
+                            <Link
+                                href="/academico/evidencias"
+                                className="px-4 py-2 bg-[#1B2D6B] text-white text-sm font-medium rounded-lg hover:bg-[#152558] transition-colors shrink-0 ml-4"
+                            >
+                                Ir a evidencias
+                            </Link>
+                        )}
                     </div>
-                    {compromisoApa?.participa_evaluacion !== false && (
-                        <Link
-                            href="/academico/evidencias"
-                            className="px-4 py-2 bg-[#1B2D6B] text-white text-sm font-medium rounded-lg hover:bg-[#152558] transition-colors shrink-0 ml-4"
-                        >
-                            Ir a evidencias
-                        </Link>
-                    )}
-                </div>
+                )}
 
             </AppLayout>
         </>

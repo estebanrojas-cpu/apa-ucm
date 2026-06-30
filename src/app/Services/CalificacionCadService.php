@@ -201,6 +201,17 @@ class CalificacionCadService
         };
     }
 
+    /** Apelaciones Regular/Deficiente → CCDA (2° nivel); demás conceptos → CCA. */
+    public static function destinoApelacionParaConcepto(?string $concepto): string
+    {
+        return in_array($concepto, ['regular', 'deficiente'], true) ? 'ccda' : 'cca';
+    }
+
+    public static function labelDestinoApelacion(string $destino): string
+    {
+        return $destino === 'ccda' ? 'CCDA (2° nivel)' : 'CCA';
+    }
+
     public static function labelConcepto(string $concepto): string
     {
         return match ($concepto) {

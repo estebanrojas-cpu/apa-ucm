@@ -14,13 +14,15 @@ class Periodo extends Model
     protected $fillable = [
         'anio', 'nombre', 'estado',
         'fecha_inicio', 'fecha_cierre', 'creado_por',
+        'cerrado_en', 'cerrado_por',
     ];
 
     protected function casts(): array
     {
         return [
-            'fecha_inicio'  => 'date',
-            'fecha_cierre'  => 'date',
+            'fecha_inicio' => 'date',
+            'fecha_cierre' => 'date',
+            'cerrado_en'   => 'datetime',
         ];
     }
 

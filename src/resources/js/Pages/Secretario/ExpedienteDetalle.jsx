@@ -21,7 +21,7 @@ const CALIFICACIONES = {
     deficiente: 'Deficiente',
 };
 
-export default function ExpedienteDetalle({ nomina, categorias, evidenciasPorCategoria, evidenciasApelacionPorCategoria, totalEvidencias, apelacion, calificacionFinal }) {
+export default function ExpedienteDetalle({ nomina, categorias, evidenciasPorCategoria, evidenciasApelacionPorCategoria, totalEvidencias, apelacion, destinoApelacionCierre, calificacionFinal }) {
     const { flash } = usePage().props;
     const badge = ESTADOS[nomina.estado] ?? { label: nomina.estado, cls: 'bg-gray-100 text-gray-600' };
     const puedeValidar  = PUEDE_VALIDAR.includes(nomina.estado);
@@ -261,6 +261,7 @@ export default function ExpedienteDetalle({ nomina, categorias, evidenciasPorCat
                 {apelacion && (
                     <ApelacionPanel
                         apelacion={apelacion}
+                        destinoApelacionCierre={destinoApelacionCierre}
                         nominaId={nomina.id}
                         categorias={categorias}
                         evidenciasApelacionPorCategoria={evidenciasApelacionPorCategoria ?? {}}
@@ -381,7 +382,7 @@ function LicenciaPanel({ nomina }) {
     );
 }
 
-function ApelacionPanel({ apelacion, nominaId, categorias = [], evidenciasApelacionPorCategoria = {} }) {
+function ApelacionPanel({ apelacion, destinoApelacionCierre, nominaId, categorias = [], evidenciasApelacionPorCategoria = {} }) {
     const cerrarForm = useForm({});
 
     function submitCerrar(e) {
@@ -416,7 +417,11 @@ function ApelacionPanel({ apelacion, nominaId, categorias = [], evidenciasApelac
             {apelacion.estado === 'en_revision' && (
                 <form onSubmit={submitCerrar} className="border-t border-gray-100 pt-4">
                     <p className="text-xs text-gray-500 mb-3">
-                        Al enviar, el expediente quedará disponible para que la CCA re-evalúe la apelación.
+                        Al enviar, el expediente quedará disponible para re-evaluación por{' '}
+                        <strong>{destinoApelacionCierre?.label ?? 'CCA o CCDA'}</strong>
+                        {destinoApelacionCierre?.destino === 'ccda'
+                            ? ' (apelación 2° nivel — calificación Regular o Deficiente).'
+                            : ' (Comisión de Calificación de la facultad).'}
                     </p>
                     <div className="flex justify-end">
                         <button type="submit" disabled={cerrarForm.processing}
@@ -429,7 +434,11 @@ function ApelacionPanel({ apelacion, nominaId, categorias = [], evidenciasApelac
 
             {apelacion.estado === 'resuelta' && (
                 <div className="border-t border-gray-100 pt-4 text-xs text-gray-500">
-                    Apelación enviada a evaluación. El expediente está en proceso de re-evaluación.
+                    Apelación enviada a{' '}
+                    {apelacion.destino === 'ccda' ? 'CCDA (2° nivel)' : 'CCA'}.
+                    {apelacion.destino === 'ccda'
+                        ? ' Pendiente de resolución por el analista CCDA.'
+                        : ' El expediente está en proceso de re-evaluación por la CCA.'}
                 </div>
             )}
         </div>

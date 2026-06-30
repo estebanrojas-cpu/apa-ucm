@@ -1,62 +1,25 @@
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import AppLayout from '@/Layouts/AppLayout';
-import { useState, useEffect } from 'react';
 
-function SlotSelect({ slot, label, value, candidatos, onChange, disabled, periodoId, facultadId }) {
-    const [q, setQ] = useState('');
-    const [results, setResults] = useState([]);
-    const [open, setOpen] = useState(false);
-
-    const selected = candidatos.find(c => c.id === value);
-
-    useEffect(() => {
-        if (!open || q.length < 2) {
-            setResults([]);
-            return;
-        }
-        const t = setTimeout(() => {
-            fetch(`/analista/periodos/${periodoId}/cargos/${facultadId}/buscar?q=${encodeURIComponent(q)}`)
-                .then(r => r.json())
-                .then(setResults)
-                .catch(() => setResults([]));
-        }, 250);
-        return () => clearTimeout(t);
-    }, [q, open, periodoId, facultadId]);
+function SlotSelect({ slot, label, value, candidatos, candidatosExternos, onChange, disabled }) {
+    const lista = slot.es_externo ? candidatosExternos : candidatos;
+    const selected = lista.find(c => c.id === value);
 
     return (
         <div className="space-y-1">
-            <label className="block text-sm font-medium text-gray-700">{label}</label>
+            <label className="block text-sm font-medium text-gray-700">
+                {label}
+                {slot.es_externo && (
+                    <span className="ml-2 text-xs font-normal text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                        Externo — otra facultad
+                    </span>
+                )}
+            </label>
             {selected && (
                 <p className="text-xs text-gray-500 mb-1">
                     Actual: <span className="font-medium text-gray-700">{selected.name}</span> — {selected.rut}
                 </p>
             )}
-            <div className="relative">
-                <input
-                    type="text"
-                    placeholder="Buscar por RUT o nombre..."
-                    value={q}
-                    onChange={e => { setQ(e.target.value); setOpen(true); }}
-                    onFocus={() => setOpen(true)}
-                    disabled={disabled}
-                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 disabled:bg-gray-50"
-                />
-                {open && results.length > 0 && (
-                    <ul className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
-                        {results.map(r => (
-                            <li key={r.id}>
-                                <button
-                                    type="button"
-                                    className="w-full text-left px-3 py-2 text-sm hover:bg-blue-50"
-                                    onClick={() => { onChange(slot.key, r.id); setQ(''); setOpen(false); }}
-                                >
-                                    {r.label}
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                )}
-            </div>
             <select
                 value={value ?? ''}
                 onChange={e => onChange(slot.key, e.target.value || null)}
@@ -64,7 +27,7 @@ function SlotSelect({ slot, label, value, candidatos, onChange, disabled, period
                 className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 disabled:bg-gray-50"
             >
                 <option value="">— Sin asignar —</option>
-                {candidatos.map(c => (
+                {lista.map(c => (
                     <option key={c.id} value={c.id}>{c.name} — {c.rut}</option>
                 ))}
             </select>
@@ -73,8 +36,9 @@ function SlotSelect({ slot, label, value, candidatos, onChange, disabled, period
 }
 
 export default function AsignacionFacultadEdit({
-    periodo, facultad, cargos, slots, candidatos, comision_estado, comision_bloqueada,
+    periodo, facultad, cargos, slots, candidatos, candidatos_externos, comision_estado, comision_bloqueada,
 }) {
+    const { flash } = usePage().props;
     const form = useForm({ ...cargos });
 
     function setCargo(key, nominaId) {
@@ -101,6 +65,16 @@ export default function AsignacionFacultadEdit({
                     <span className="text-gray-700 font-medium">{facultad.nombre}</span>
                 </div>
 
+                {flash?.error && (
+                    <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-800">
+                        {flash.error}
+                    </div>
+                )}
+                {flash?.success && (
+                    <div className="mb-4 rounded-lg bg-green-50 border border-green-200 px-4 py-3 text-sm text-green-800">
+                        {flash.success}
+                    </div>
+                )}
                 {comision_bloqueada && (
                     <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
                         La comisión CCA está confirmada. Los cargos no pueden modificarse.
@@ -121,10 +95,9 @@ export default function AsignacionFacultadEdit({
                                 label={slot.label}
                                 value={form.data[slot.key]}
                                 candidatos={candidatos}
+                                candidatosExternos={candidatos_externos}
                                 onChange={setCargo}
                                 disabled={comision_bloqueada}
-                                periodoId={periodo.id}
-                                facultadId={facultad.id}
                             />
                         ))}
                     </div>
