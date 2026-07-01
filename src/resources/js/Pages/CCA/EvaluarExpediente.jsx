@@ -360,18 +360,35 @@ export default function EvaluarExpediente({
 
                 {informeJefatura && (
                     <div className="mb-6 bg-indigo-50 border border-indigo-200 rounded-xl p-5">
-                        <h2 className="text-xs font-semibold text-indigo-700 uppercase tracking-wide mb-3">
-                            Informe de Jefatura
-                        </h2>
-                        <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-start justify-between gap-4 mb-3">
                             <div>
-                                <p className="text-sm text-indigo-900 font-medium">
-                                    {informeJefatura.jefe} —{' '}
-                                    <span className="font-bold">{informeJefatura.puntaje}/100</span>
-                                    {' '}
-                                    <span className="text-xs text-indigo-600">({informeJefatura.calificacion_label})</span>
+                                <h2 className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">
+                                    Informe de Jefatura
+                                </h2>
+                                <p className="text-xs text-indigo-600 mt-1">
+                                    Ver informe completo y observación general.
                                 </p>
                             </div>
+                        </div>
+                        <div className="mb-3">
+                            <p className="text-sm text-indigo-900 font-medium">{informeJefatura.jefe}</p>
+                            {informeJefatura.puntaje !== null ? (
+                                <p className="text-xs text-indigo-600 mt-1">
+                                    {informeJefatura.puntaje}/100 — {informeJefatura.calificacion_label}
+                                </p>
+                            ) : (
+                                <p className="text-xs text-indigo-600 mt-1">
+                                    Informe de Jefatura
+                                </p>
+                            )}
+                        </div>
+                        <div className="mb-4">
+                            <Link
+                                href={`/cca/expedientes/${nomina.id}/informe-jefatura`}
+                                className="inline-flex items-center gap-2 px-3 py-2 bg-[#1B2D6B] text-white text-xs font-medium rounded-lg hover:bg-[#152558] transition-colors"
+                            >
+                                Ver informe completo
+                            </Link>
                         </div>
                         {informeJefatura.observacion_general && (
                             <div className="mb-2">

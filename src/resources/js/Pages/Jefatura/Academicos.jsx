@@ -46,14 +46,12 @@ export default function Academicos({ periodo, academicos, etapaHabilitada, fecha
                                 <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500 uppercase tracking-wide">
                                     <th className="text-left px-5 py-3 font-medium">Académico</th>
                                     <th className="text-left px-5 py-3 font-medium">Departamento</th>
-                                    <th className="text-left px-5 py-3 font-medium">Calificación CCA</th>
                                     <th className="text-left px-5 py-3 font-medium">Informe jefatura</th>
                                     <th className="px-5 py-3" />
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100">
                                 {academicos.map(ac => {
-                                    const califColor = CALIFICACIONES[ac.calificacion] ?? 'text-gray-500';
                                     return (
                                         <tr key={ac.id} className="hover:bg-gray-50 transition-colors">
                                             <td className="px-5 py-3.5">
@@ -64,17 +62,8 @@ export default function Academicos({ periodo, academicos, etapaHabilitada, fecha
                                                 {ac.academico.departamento ?? '—'}
                                             </td>
                                             <td className="px-5 py-3.5">
-                                                {ac.calificacion ? (
-                                                    <span className={`font-semibold ${califColor}`}>
-                                                        {ac.calificacion} ({ac.puntaje} pts)
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-gray-400 text-xs">Sin calificación</span>
-                                                )}
-                                            </td>
-                                            <td className="px-5 py-3.5">
                                                 {ac.tiene_informe ? (
-                                                    <span className="text-xs text-green-700 font-medium">✓ Emitido</span>
+                                                    <span className="text-xs text-green-700 font-medium">✓ Informe emitido</span>
                                                 ) : (
                                                     <span className="text-xs text-gray-400">Pendiente</span>
                                                 )}

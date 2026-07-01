@@ -33,8 +33,17 @@ class CalificacionJefatura extends Model
         return $this->observaciones()['observacion_general'] ?? '';
     }
 
+    public function esInforme(): bool
+    {
+        return $this->puntaje === 0;
+    }
+
     public function calificacionLabel(): string
     {
+        if ($this->esInforme()) {
+            return 'Informe';
+        }
+
         return match(true) {
             $this->puntaje >= 80 => 'Muy Bueno',
             $this->puntaje >= 60 => 'Bueno',

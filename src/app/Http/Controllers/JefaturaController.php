@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CalificacionJefatura;
+use App\Models\AsignacionCargo;
 use App\Models\CategoriaApa;
 use App\Models\Cronograma;
 use App\Models\Nomina;
@@ -57,8 +58,6 @@ class JefaturaController extends Controller
                         'departamento'=> $n->academico->departamento?->nombre,
                     ],
                     'tiene_informe' => $n->calificacionJefatura !== null,
-                    'puntaje'       => $n->calificacionJefatura?->puntaje,
-                    'calificacion'  => $n->calificacionJefatura?->calificacionLabel(),
                 ])->values();
             }
         }
@@ -143,8 +142,37 @@ class JefaturaController extends Controller
         $observaciones = $informe->observaciones();
         $periodo       = $nomina->periodo;
 
+        $jefe = auth()->user();
+
+        // Obtener firmantes configurados para la facultad/periodo de la nómina.
+        $facultadId = $nomina->academico?->facultad_id ?? $nomina->facultad_id;
+        $periodoId  = $periodo->id;
+
+        $slots = [
+            'miembro_cca_1',
+            'miembro_cca_2',
+            'secretario',
+            'decano',
+            'miembro_cca_sindicato',
+        ];
+
+        $firmantes = [];
+        foreach ($slots as $slot) {
+            $asig = AsignacionCargo::where('periodo_id', $periodoId)
+                ->where('facultad_id', $facultadId)
+                ->where('slot', $slot)
+                ->first();
+
+            $nombre = null;
+            if ($asig && $asig->nomina && $asig->nomina->academico) {
+                $nombre = $asig->nomina->academico->name;
+            }
+
+            $firmantes[$slot] = $nombre;
+        }
+
         return view('jefatura.imprimir', compact(
-            'nomina', 'informe', 'categorias', 'observaciones', 'periodo'
+            'nomina', 'informe', 'categorias', 'observaciones', 'periodo', 'jefe', 'firmantes'
         ));
     }
 }

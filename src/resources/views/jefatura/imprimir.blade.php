@@ -2,7 +2,7 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Informe de Jefatura — {{ ->academico->name }}</title>
+    <title>Informe de Jefatura — {{ $nomina->academico->name }}</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { font-family: Arial, sans-serif; font-size: 11px; color: #111; background: #fff; padding: 36px 48px; }
@@ -17,8 +17,8 @@
         .body-text { font-size: 11px; line-height: 1.8; color: #222; margin-bottom: 20px; }
         .body-text strong { color: #1B2D6B; }
         .obs-box { border: 1px solid #ccc; border-radius: 6px; padding: 14px 16px; font-size: 11px; line-height: 1.8; color: #333; white-space: pre-wrap; min-height: 80px; background: #fafafa; margin-bottom: 30px; }
-        .firmas { display: flex; justify-content: space-between; margin-top: 60px; gap: 40px; }
-        .firma-box { flex: 1; text-align: center; }
+        .firmas { display: flex; flex-wrap: wrap; justify-content: space-between; margin-top: 60px; gap: 24px; }
+        .firma-box { flex: 1; min-width: 160px; text-align: center; }
         .firma-line { border-top: 1px solid #333; margin-bottom: 8px; }
         .firma-box p { font-size: 10px; color: #444; margin-top: 2px; }
         .firma-box strong { font-size: 11px; color: #111; }
@@ -29,53 +29,87 @@
 <body>
 <div class="no-print">
     <button onclick="window.print()" style="padding:6px 18px;background:#1B2D6B;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;">Imprimir / Guardar PDF</button>
-    <a href="/jefe/academicos/{{ ->id }}" style="font-size:11px;color:#1B2D6B;text-decoration:underline;">← Volver al informe</a>
+    <a href="{{ $backUrl ?? url('/jefe/academicos/'.$nomina->id) }}" style="font-size:11px;color:#1B2D6B;text-decoration:underline;">← Volver al informe</a>
 </div>
 <div class="header">
     <div class="header-left">
         <div class="ucm-logo">UCM</div>
         <h1>Universidad Católica del Maule</h1>
-        <h2>Vicerrectoría Académica · Proceso de Calificación Académica Docente {{ ->anio }}</h2>
+        <h2>Vicerrectoría Académica · Proceso de Calificación Académica Docente {{ $nomina->periodo->anio }}</h2>
     </div>
     <div class="header-right">
-        <p><strong>N° Período:</strong> {{ ->nombre }}</p>
+        <p><strong>N° Período:</strong> {{ $nomina->periodo->nombre }}</p>
         <p><strong>Fecha emisión:</strong> {{ now()->format('d/m/Y') }}</p>
         <p><strong>Tipo:</strong> Informe de Jefatura</p>
     </div>
 </div>
 <p class="body-text">Talca, {{ now()->format('d') }} de {{ \Carbon\Carbon::now()->locale('es')->isoFormat('MMMM') }} de {{ now()->year }}</p>
 <p class="body-text" style="margin-bottom:16px;">
-    Por medio del presente documento, quien suscribe, en calidad de <strong>{{ ->jefe->name }}</strong>,
+    Por medio del presente documento, quien suscribe, en calidad de <strong>{{ $jefe->name }}</strong>,
     Director/a de Departamento de la Universidad Católica del Maule,
     emite el siguiente informe institucional en el contexto del Proceso de Calificación Académica Docente
-    correspondiente al período académico <strong>{{ ->anio }}</strong>, respecto del/la académico/a:
+    correspondiente al período académico <strong>{{ $nomina->periodo->anio }}</strong>, respecto del/la académico/a:
 </p>
 <p class="body-text" style="margin-left:24px;margin-bottom:20px;">
-    <strong>Nombre:</strong> {{ ->academico->name }}<br>
-    <strong>RUT:</strong> {{ ->academico->rut }}<br>
-    @if(->academico->departamento)
-    <strong>Departamento:</strong> {{ ->academico->departamento->nombre }}<br>
+    <strong>Nombre:</strong> {{ $nomina->academico->name }}<br>
+    <strong>RUT:</strong> {{ $nomina->academico->rut }}<br>
+    @if($nomina->academico->departamento)
+    <strong>Departamento:</strong> {{ $nomina->academico->departamento->nombre }}<br>
     @endif
-    <strong>Categoría académica:</strong> {{ ucfirst(->categoria ?? '—') }}
+    <strong>Categoría académica:</strong> {{ ucfirst($nomina->categoria ?? '—') }}
 </p>
 <p class="body-text" style="margin-bottom:8px;"><strong>Observaciones:</strong></p>
-<div class="obs-box">{{ ['observacion_general'] ?? 'Sin observaciones registradas.' }}</div>
+<div class="obs-box">{{ $observaciones['observacion_general'] ?? 'Sin observaciones registradas.' }}</div>
 <div class="firmas">
     <div class="firma-box">
         <div class="firma-space"></div>
         <div class="firma-line"></div>
-        <p><strong>{{ ->jefe->name }}</strong></p>
+        <p><strong>{{ $jefe->name }}</strong></p>
         <p>Director/a de Departamento</p>
         <p>Universidad Católica del Maule</p>
     </div>
     <div class="firma-box">
         <div class="firma-space"></div>
         <div class="firma-line"></div>
-        <p><strong>{{ ->academico->name }}</strong></p>
+        <p><strong>{{ $nomina->academico->name }}</strong></p>
         <p>Académico/a</p>
         <p>Universidad Católica del Maule</p>
     </div>
 </div>
-<div class="footer">Documento generado por el Sistema APA UCM · Universidad Católica del Maule · Talca, Chile</div>
+    <h3 style="margin-top:36px;font-size:12px;color:#1B2D6B;">Firmas — Comisión Calificadora Académica</h3>
+    <div class="firmas" style="margin-top:18px;">
+        <div class="firma-box">
+            <div class="firma-space"></div>
+            <div class="firma-line"></div>
+            <p><strong>{{ $firmantes['miembro_cca_1'] ?? '— No designado —' }}</strong></p>
+            <p>Miembro CCA 1</p>
+        </div>
+        <div class="firma-box">
+            <div class="firma-space"></div>
+            <div class="firma-line"></div>
+            <p><strong>{{ $firmantes['miembro_cca_2'] ?? '— No designado —' }}</strong></p>
+            <p>Miembro CCA 2</p>
+        </div>
+        <div class="firma-box">
+            <div class="firma-space"></div>
+            <div class="firma-line"></div>
+            <p><strong>{{ $firmantes['secretario'] ?? '— No designado —' }}</strong></p>
+            <p>Secretario/a de Facultad</p>
+        </div>
+        <div class="firma-box">
+            <div class="firma-space"></div>
+            <div class="firma-line"></div>
+            <p><strong>{{ $firmantes['decano'] ?? '— No designado —' }}</strong></p>
+            <p>Decano/a de Facultad</p>
+        </div>
+        <div class="firma-box">
+            <div class="firma-space"></div>
+            <div class="firma-line"></div>
+            <p><strong>{{ $firmantes['miembro_cca_sindicato'] ?? '— No designado —' }}</strong></p>
+            <p>Miembro CCA (Sindicato)</p>
+        </div>
+    </div>
+
+    <div class="footer">Documento generado por el Sistema APA UCM · Universidad Católica del Maule · Talca, Chile</div>
 </body>
 </html>

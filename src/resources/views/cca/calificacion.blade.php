@@ -447,41 +447,32 @@
 
 {{-- ── FIRMAS ──────────────────────────────────────────── --}}
 @php
-    $firmantes = $evaluaciones->pluck('evaluador')->filter()->unique('id')->values();
-    $firmante1 = $firmantes->get(0);
-    $firmante2 = $firmantes->get(1);
-    $firmante3 = $firmantes->get(2);
+    // Preferir firmantes explícitos pasados desde el controlador; si no existen, usar evaluadores.
+    $slots = ['miembro_cca_1','miembro_cca_2','secretario','decano','miembro_cca_sindicato'];
 @endphp
+
 <div class="firma-section">
+    @foreach ($slots as $slot)
     <div class="firma-box">
         <div class="firma-space"></div>
         <div class="firma-line"></div>
-        <p class="firma-name">{{ $firmante1?->name ?? '' }}</p>
-        <p class="firma-label">Presidente(a) Comisión Calificadora Académica</p>
+        <p class="firma-name">{{ $firmantes[$slot] ?? ($evaluaciones->pluck('evaluador')->pluck('name')->first() ?? '— No designado —') }}</p>
+        <p class="firma-label">
+            @if($slot === 'miembro_cca_1')Miembro CCA 1
+            @elseif($slot === 'miembro_cca_2')Miembro CCA 2
+            @elseif($slot === 'miembro_cca_sindicato')Miembro CCA (Sindicato)
+            @elseif($slot === 'secretario')Secretario/a de Facultad
+            @elseif($slot === 'decano')Decano/a de Facultad
+            @endif
+        </p>
     </div>
-    <div class="firma-box">
-        <div class="firma-space"></div>
-        <div class="firma-line"></div>
-        <p class="firma-name">{{ $firmante2?->name ?? '' }}</p>
-        <p class="firma-label">Integrante Comisión Calificadora Académica</p>
-    </div>
-    <div class="firma-box">
-        <div class="firma-space"></div>
-        <div class="firma-line"></div>
-        <p class="firma-name">{{ $firmante3?->name ?? '' }}</p>
-        <p class="firma-label">Integrante Comisión Calificadora Académica</p>
-    </div>
+    @endforeach
+
     <div class="firma-box">
         <div class="firma-space"></div>
         <div class="firma-line"></div>
         <p class="firma-name">{{ $academico->name }}</p>
         <p class="firma-label">Académico/a Evaluado/a — Recepción conforme</p>
-    </div>
-    <div class="firma-box">
-        <div class="firma-space"></div>
-        <div class="firma-line"></div>
-        <p class="firma-name"></p>
-        <p class="firma-label">Secretario/a de Facultad — Timbre y Fecha</p>
     </div>
 </div>
 

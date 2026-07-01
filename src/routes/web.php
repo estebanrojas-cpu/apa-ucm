@@ -129,6 +129,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/expedientes/{nomina}/evidencias/{evidencia}/descargar',      [EvaluacionController::class, 'downloadEvidencia'])->name('cca.evidencias.download');
         Route::get('/expedientes/{nomina}/evidencias/{evidencia}/previsualizar', [EvaluacionController::class, 'previewEvidencia'])->name('cca.evidencias.preview');
         Route::get('/expedientes/{nomina}/calificacion-pdf',                 [EvaluacionController::class, 'imprimirCalificacion'])->name('cca.expedientes.calificacion-pdf');
+        Route::get('/expedientes/{nomina}/informe-jefatura',                 [EvaluacionController::class, 'imprimirInformeJefatura'])->name('cca.expedientes.informe-jefatura');
     });
 
     Route::middleware('role:vicerrectora')->prefix('vicerrectora')->group(function () {
